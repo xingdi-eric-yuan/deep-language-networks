@@ -115,14 +115,14 @@ class LanguageLayer(BaseLayer):
 
         # update inputs
         if is_first_layer:
-            return
+            return previous_prompt, self.prompt, inputs, inputs
         new_inputs = []
         for _info in backward_info:
             # 1) sample input proposals
             input_candidates = self.input_sampler(self.prompt, _info)  # num_samples
             # 2) rank the inputs
             best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs)
-            # 3) store new inputs
+            # 3) collect new inputs
             new_inputs.append(best_input)
         return previous_prompt, self.prompt, inputs, new_inputs
 
