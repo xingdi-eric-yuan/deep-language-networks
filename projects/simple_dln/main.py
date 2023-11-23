@@ -5,11 +5,11 @@ import os
 
 from dln.dataset import Dataset, init_dataset
 
-from dln.loss import LossRegistry
+# from dln.loss import LossRegistry
 from dln.operator import LLMRegistry
 
 from dln.vi.model import log_message
-from layers import DeepWideNetwork, loss_to_info
+from layers import DLN_2
 
 
 # try:
@@ -19,20 +19,20 @@ from layers import DeepWideNetwork, loss_to_info
 #     pass
 
 
-def train(model, dataset: Dataset, loss_fn, batch_size, iters):
+def train(model, dataset: Dataset, batch_size, iters):
     for _ in range(iters):
         x, y, _ = dataset.get_batch("train", batch_size, random_sample=True)
         y_hat = model.forward(x)
-        losses = loss_fn(y_hat, y)
-        losses_info = loss_to_info(x, y_hat, y, losses)
-        model.backward(losses_info)
-        # [
-        #     print(f"y_hat: {a}\n    y: {b}\n loss: {c}\n")
-        #     for a, b, c in zip(y_hat, y, loss)
-        # ]
+        # losses = loss_fn(y_hat, y)
+        # losses_info = loss_to_info(x, y_hat, y, losses)
+        model.backward(y)
+        [
+            print(f"y_hat: {a}\n    y: {b}\n")
+            for a, b in zip(y_hat, y)
+        ]
 
 
-def train_dwln(args):
+def train_dln(args):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")
     out_dir = os.path.join(args.out_dir, timestamp)
     os.makedirs(out_dir, exist_ok=True)
@@ -60,13 +60,13 @@ def train_dwln(args):
     fwd_model = llm_registry[args.fwd_model]
     bwd_model = llm_registry[args.bwd_model]
 
-    loss_fn = LossRegistry.instantiate(args.loss_function)
-    dw = DeepWideNetwork(fwd_model, bwd_model)
+    # loss_fn = LossRegistry.instantiate(args.loss_function)
+    model = DLN_2("Solve the math world problem", fwd_model, bwd_model)
 
     train(
-        model=dw,
+        model=model,
         dataset=dataset,
-        loss_fn=loss_fn,
+        # loss_fn=loss_fn,
         batch_size=args.batch_size,
         iters=args.iters
     )
@@ -77,7 +77,6 @@ def main():
     parser.add_argument("--config", type=str)
     parser.add_argument("--fwd_model", type=str)
     parser.add_argument("--bwd_model", type=str)
-    parser.add_argument("--loss_function", type=str)
     parser.add_argument("--output_scoring_function", type=str)
     parser.add_argument("--data_dir", type=str, default="../../data")
     parser.add_argument("--dataset", type=str, default="gsm8k")
@@ -89,10 +88,10 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out_dir", type=str, default="./log", help="log directory")
     args = parser.parse_args()
-    train_dwln(args)
+    train_dln(args)
 
 
 if __name__ == "__main__":
     main()
 
-# python main.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset gsm8k --loss_function number_presence_loss --output_scoring_function accuracy --out_dir log/debug
+# python main.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset gsm8k --output_scoring_function accuracy --out_dir log/debug
