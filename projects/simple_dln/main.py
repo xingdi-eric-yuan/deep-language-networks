@@ -24,7 +24,7 @@ def gsm8k_loss(y_hat, y):
     loss = []
     for i in range(len(y_hat)):
         y_numbers = re.findall(r'\b\d+\b', y[i])
-        y_hat_numbers = re.findall(r'\b\d+\b', y[i])
+        y_hat_numbers = re.findall(r'\b\d+\b', y_hat[i])
         if len(set(y_numbers) & set(y_hat_numbers)) > 0:
             loss.append(0.0)
         else:
@@ -36,8 +36,8 @@ def validate(model, dataset: Dataset, iteration):
 
     log_message("===================================")
     log_message(colored("VALIDATING... ITER %s" % str(iteration), "red"))
-    log_message("Current L1 weights:", model.l1.prompt, "This layer is " + ("trainable" if model.l1.trainable else "fixed"))
-    log_message("Current L2 weights:", model.l2.prompt, "This layer is " + ("trainable" if model.l2.trainable else "fixed"))
+    log_message("Current L1 weights:", model.l1.prompt, "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
+    log_message("Current L2 weights:", model.l2.prompt, "\n-- This layer is " + ("trainable" if model.l2.trainable else "fixed"))
 
     acc = 0.0
     tot = 0.0
@@ -61,7 +61,8 @@ def validate(model, dataset: Dataset, iteration):
     dev_acc = acc / tot
     if iteration == 0:
         log_message(colored("INIT DEV ACC: {}".format(dev_acc), "red"))
-    log_message(colored("DEV ACC: {}".format(dev_acc), "red"))
+    else:
+        log_message(colored("DEV ACC: {}".format(dev_acc), "red"))
     return dev_acc
 
 
