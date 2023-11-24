@@ -23,11 +23,10 @@ class LNBackwardInfo:
 
 class Node(ABC):
 
-    def __init__(self, init, forward_template, forward_evaluate, layer):
+    def __init__(self, init, forward_template, forward_evaluate):
         self.prompt = init
         self.forward_template = forward_template
         self.forward_evaluate = forward_evaluate
-        self.layer = layer
 
     def update_prompt(self, prompt):
         self.prompt = prompt
@@ -66,7 +65,7 @@ class BaseLayer(ABC):
             forward_template,
             template_directory="./templates"
         )
-        self.nodes = Node(init, forward_template, forward_evaluate)
+        self.node = Node(init, forward_template, forward_evaluate)
         self.prompt_sampler = prompt_sampler
         self.input_sampler = input_sampler
         self.scorer = scorer
@@ -96,9 +95,10 @@ class LanguageLayer(BaseLayer):
 
     def __init__(
         self,
+        *args,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(*args, **kwargs)
 
     def backward(self, task, backward_info, is_first_layer=False):
 
@@ -241,15 +241,11 @@ class Scorer(ABC):
 
     def __init__(self, forward_evaluate, forward_template, eval_kwargs=None):
         self.forward_evaluate = forward_evaluate
-        self.forward_template = forward_template
+        self.forward_template = load_template(
+            forward_template,
+            template_directory="./templates"
+        )
         self.eval_kwargs = eval_kwargs or {}
-
-    def __call__(self, *args, **kwargs):
-        return self.score(*args, **kwargs)
-
-    @abstractmethod
-    def score(self, *args, **kwargs):
-        pass
 
 
 class LogProbsScorer(Scorer):
@@ -348,6 +344,6 @@ class LogProbsScorer(Scorer):
         eval_batch = [f"{contexts[j]}\n{gt_outputs[j]}" for j in range(len(inputs))]
         eval_results = self._forward_unique_evals(eval_batch)
         logprobs_results = self._get_logprobs_results(contexts, eval_results)  # inputs
-        best_indexes = logprobs_results.argmax(axis=-1)  # 1
+        best_indexes = logprobs_results.logp_targets.argmax(axis=-1)  # 1
         best_input = inputs[best_indexes]
         return best_input

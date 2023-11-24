@@ -134,6 +134,8 @@ class GPT(LLM):
         engine_for_encoder = self.engine
         if engine_for_encoder == "gpt-35-turbo":
             engine_for_encoder = "gpt-3.5-turbo"
+        elif engine_for_encoder == "gpt-35-turbo-instruct":
+            engine_for_encoder = "gpt-3.5-turbo"
         self.encoder = instantiate_tokenizer(engine_for_encoder)
         openai.api_version = os.environ.get('OPENAI_API_VERSION')
         self._has_logprobs = self.engine in self.LOGPROBS_MODELS
