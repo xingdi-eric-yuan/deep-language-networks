@@ -23,7 +23,7 @@ def train(model, dataset: Dataset, batch_size, iters):
     for _ in range(iters):
         x, y, _ = dataset.get_batch("train", batch_size, random_sample=True)
         y_hat = model.forward(x)
-        h, input, = model.h, model.input
+        h, input, = model.h, model.inputs
         model.backward(y)
         print("===================================")
         print("------- L1")
@@ -64,7 +64,8 @@ def train_dln(args):
     bwd_model = llm_registry[args.bwd_model]
 
     # loss_fn = LossRegistry.instantiate(args.loss_function)
-    model = DLN_2("Solve the math world problem", fwd_model, bwd_model)
+    # model = DLN_2("Solve the math world problem", fwd_model, bwd_model)
+    model = DLN_2("Read the following sentence, then choose whether it is subjective or objective.", fwd_model, bwd_model)
 
     train(
         model=model,
@@ -97,4 +98,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python main.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset gsm8k --output_scoring_function accuracy --out_dir log/debug
+# python main.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset subj --output_scoring_function accuracy --out_dir log/debug
