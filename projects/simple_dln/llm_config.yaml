@@ -1,5 +1,5 @@
 - name: gpt-3-fwd
-  model: text-davinci-003
+  model: gpt-35-turbo-instruct
   api_key: ${OPENAI_API_KEY}
   api_base: ${OPENAI_API_BASE}
   api_type: ${OPENAI_API_TYPE}
@@ -8,7 +8,7 @@
   max_tokens: 512
 
 - name: gpt-3-bwd
-  model: text-davinci-003
+  model: gpt-35-turbo-instruct
   api_key: ${OPENAI_API_KEY}
   api_base: ${OPENAI_API_BASE}
   api_type: ${OPENAI_API_TYPE}

@@ -113,6 +113,7 @@ class GPT(LLM):
     ]
 
     COMPLETION_MODELS = [
+        "gpt-35-turbo-instruct",
         "text-davinci-003",
         "text-davinci-002",
         "code-davinci-002",
