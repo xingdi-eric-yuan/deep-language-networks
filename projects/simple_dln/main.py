@@ -22,14 +22,18 @@ from layers import DLN_2
 def train(model, dataset: Dataset, batch_size, iters):
     for _ in range(iters):
         x, y, _ = dataset.get_batch("train", batch_size, random_sample=True)
-        y_hat = model.forward(x)
+        y_hat, h = model.forward(x)
         # losses = loss_fn(y_hat, y)
         # losses_info = loss_to_info(x, y_hat, y, losses)
         model.backward(y)
-        [
-            print(f"y_hat: {a}\n    y: {b}\n")
-            for a, b in zip(y_hat, y)
-        ]
+        print("===================================")
+        print("------- L1")
+        print(model.l1.prompt)
+        print("------- L2")
+        print(model.l2.prompt)
+        for i, (a, b, c, d) in enumerate(zip(x, h, y_hat, y)):
+            print("-------------------------------" + str(i))
+            print(f"--------------\nx: {a}\nh: {b}\ny_hat: {c}\ny: {d}\n")
 
 
 def train_dln(args):

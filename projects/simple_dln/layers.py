@@ -59,6 +59,7 @@ class BaseLayer(ABC):
         input_sampler: "Sampler",
         scorer: "Scorer",
         init: str = None,
+        trainable: bool = True,
         **kwargs,
     ):
         forward_template = load_template(
@@ -69,6 +70,7 @@ class BaseLayer(ABC):
         self.prompt_sampler = prompt_sampler
         self.input_sampler = input_sampler
         self.scorer = scorer
+        self.trainable = trainable
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
@@ -102,16 +104,19 @@ class LanguageLayer(BaseLayer):
 
     def backward(self, task, backward_info, is_first_layer=False):
 
-        inputs = [item.input for item in backward_info]
-        gt_outputs = [item.target for item in backward_info]
-        # update \pi
-        # 1) sample \pi proposals
-        pi_candidates = self.prompt_sampler(task, backward_info)
-        # 2) rank the candidates
-        best_prompt = self.scorer.get_best_prompt(pi_candidates, inputs, gt_outputs)
-        # 3) update prompt with the best candidate
-        previous_prompt = copy.copy(self.prompt)
-        self._update_prompts(best_prompt)
+        if self.trainable:
+            inputs = [item.input for item in backward_info]
+            gt_outputs = [item.target for item in backward_info]
+            # update \pi
+            # 1) sample \pi proposals
+            pi_candidates = self.prompt_sampler(task, backward_info)
+            # 2) rank the candidates
+            best_prompt = self.scorer.get_best_prompt(pi_candidates, inputs, gt_outputs)
+            # 3) update prompt with the best candidate
+            previous_prompt = copy.copy(self.prompt)
+            self._update_prompts(best_prompt)
+        else:
+            previous_prompt = copy.copy(self.prompt)
 
         # update inputs
         if is_first_layer:
@@ -145,6 +150,7 @@ class DLN_2(ABC):
             input_sampler=input_sampler,
             scorer=scorer,
             init="Let's think step by step.",
+            trainable=True,
         )
         self.l2 = LanguageLayer(
             forward_evaluate,
@@ -153,6 +159,7 @@ class DLN_2(ABC):
             input_sampler=input_sampler,
             scorer=scorer,
             init="Therefore, the answer is:",
+            trainable=False,
         )
         self.inputs, self.h, self.outputs = [], [], []
     
@@ -162,9 +169,9 @@ class DLN_2(ABC):
     def forward(self, x):
         # x: batch of strings
         self.inputs = x
-        self.h = self.l1(x)  # batch
+        self.h = self.l1(["\n".join([self.task, _x]) for _x in x])  # batch
         self.outputs = self.l2(self.h)  # batch
-        return self.outputs
+        return self.outputs, self.h
 
     def backward(self, gt):
         # gt: batch of strings
