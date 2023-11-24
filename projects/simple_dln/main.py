@@ -64,8 +64,13 @@ def train_dln(args):
     bwd_model = llm_registry[args.bwd_model]
 
     # loss_fn = LossRegistry.instantiate(args.loss_function)
-    # model = DLN_2("Solve the math world problem", fwd_model, bwd_model)
-    model = DLN_2("Read the following sentence, then choose whether it is subjective or objective.", fwd_model, bwd_model)
+    if args.dataset == "subj":
+        task_info_str = "Read the following sentence, then choose whether it is subjective or objective."
+    elif args.dataset == "gsm8k":
+        task_info_str = "Solve the math world problem."
+    else:
+        raise NotImplementedError
+    model = DLN_2(task_info_str, fwd_model, bwd_model)
 
     train(
         model=model,
