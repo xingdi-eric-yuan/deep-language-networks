@@ -155,7 +155,7 @@ class DLN_2(ABC):
             prompt_sampler=prompt_sampler,
             input_sampler=input_sampler,
             scorer=scorer,
-            init="Therefore, given the task that %s, the answer is:" % self.task,
+            init="Therefore, given the task: \n%s\nThe answer is:" % self.task,
             trainable=False,
         )
         self.inputs, self.h, self.outputs = [], [], []
