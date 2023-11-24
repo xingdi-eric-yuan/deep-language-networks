@@ -103,20 +103,17 @@ class LanguageLayer(BaseLayer):
         super().__init__(*args, **kwargs)
 
     def backward(self, task, backward_info, is_first_layer=False):
-
+        inputs = [item.input for item in backward_info]
+        gt_outputs = [item.target for item in backward_info]
+        previous_prompt = copy.copy(self.prompt)
         if self.trainable:
-            inputs = [item.input for item in backward_info]
-            gt_outputs = [item.target for item in backward_info]
             # update \pi
             # 1) sample \pi proposals
             pi_candidates = self.prompt_sampler(task, backward_info)
             # 2) rank the candidates
             best_prompt = self.scorer.get_best_prompt(pi_candidates, inputs, gt_outputs)
             # 3) update prompt with the best candidate
-            previous_prompt = copy.copy(self.prompt)
             self._update_prompts(best_prompt)
-        else:
-            previous_prompt = copy.copy(self.prompt)
 
         # update inputs
         if is_first_layer:
@@ -168,20 +165,20 @@ class DLN_2(ABC):
 
     def forward(self, x):
         # x: batch of strings
-        self.inputs = x
-        self.h = self.l1(["\n".join([self.task, _x]) for _x in x])  # batch
+        self.inputs = ["\n".join([self.task, _x]) for _x in x]
+        self.h = self.l1(self.inputs)  # batch
         self.outputs = self.l2(self.h)  # batch
-        return self.outputs, self.h
+        return self.outputs
 
     def backward(self, gt):
         # gt: batch of strings
+        self.zero_grad()
         # l2
         l2_backward_info = [LNBackwardInfo(_i, _o, _gt) for _i, _o, _gt in zip(self.h, self.outputs, gt)]
         _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, is_first_layer=False)
         # l1
         l1_backward_info = [LNBackwardInfo(_i, _o, _gt) for _i, _o, _gt in zip(self.inputs, self.h, new_h)]
         _ = self.l1.backward(self.task, l1_backward_info, is_first_layer=True)
-        self.zero_grad()
 
 
 class Sampler(ABC):
