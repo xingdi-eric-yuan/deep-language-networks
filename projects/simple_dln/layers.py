@@ -138,6 +138,7 @@ class DLN_2(ABC):
 
         prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=4)
         input_sampler = InputSampler(self.backward_evaluate, "ln_input_backward", num_samples=4)  # HiddenSampler hidden_backward
+        scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer")
         scorer = LogProbsScorer(self.forward_evaluate, "ln_forward")
 
         self.l1 = LanguageLayer(
@@ -151,10 +152,10 @@ class DLN_2(ABC):
         )
         self.l2 = LanguageLayer(
             forward_evaluate,
-            "ln_forward",
+            "ln_forward_final_layer",
             prompt_sampler=prompt_sampler,
             input_sampler=input_sampler,
-            scorer=scorer,
+            scorer=scorer_final_layer,
             init="Therefore, given the task: \n%s\nThe answer is:" % self.task,
             trainable=False,
         )
