@@ -68,23 +68,29 @@ def validate(model, dataset: Dataset, iteration):
 
 def train(model, dataset: Dataset, batch_size, iters):
 
-    _ = validate(model, dataset, 0)
+    dev_acc = []
+    _acc = validate(model, dataset, 0)
+    dev_acc.append(_acc)
     for iter_num in range(iters):
         x, y, _ = dataset.get_batch("train", batch_size, random_sample=True)
         y_hat = model.forward(x)
         h, input, = model.h, model.inputs
         model.backward(y)
         log_message("===================================")
-        log_message(colored("------- L1"), "red")
-        log_message(colored(model.l1.prompt), "red")
-        log_message(colored("------- L2"), "red")
-        log_message(colored(model.l2.prompt), "red")
+        log_message(colored("------- L1", "red"))
+        log_message(colored(model.l1.prompt, "red"))
+        log_message(colored("------- L2", "red"))
+        log_message(colored(model.l2.prompt, "red"))
         for i, (a, b, c, d) in enumerate(zip(input, h, y_hat, y)):
             log_message("-------------------------------" + str(i))
             log_message(f"--------------\nx: {a}\nh: {b}\ny_hat: {c}\ny: {d}\n")
         
         import pdb; pdb.set_trace()
-        _ = validate(model, dataset, iter_num + 1)
+        _acc = validate(model, dataset, iter_num + 1)
+        dev_acc.append(_acc)
+        log_message("===================================")
+        log_message(colored("DEV ACC", "blue"))
+        log_message(colored(str(dev_acc), "blue"))
 
 
 def train_dln(args):
