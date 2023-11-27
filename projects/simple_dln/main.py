@@ -86,11 +86,16 @@ def validate(model, dataset: Dataset, iteration):
     return dev_acc
 
 
-def train(model, dataset: Dataset, batch_size, iters):
+def train(model, dataset: Dataset, batch_size, iters, patience):
 
     dev_acc = []
     _acc = validate(model, dataset, 0)
     dev_acc.append(_acc)
+    best_model = model.save_model()
+    log_message(colored("Saving model...", "red"))
+    best_acc = _acc
+    patience_counter = 0
+
     for iter_num in range(iters):
         x, y, _ = dataset.get_batch("train", batch_size, random_sample=True)
         y_hat = model.forward(x)
@@ -104,14 +109,32 @@ def train(model, dataset: Dataset, batch_size, iters):
         for i, (a, b, c, d) in enumerate(zip(input, h, y_hat, y)):
             log_message("-------------------------------" + str(i))
             log_message(f"--------------\nx: {a}\nh: {b}\ny_hat: {c}\ny: {d}\n")
-        
-        import pdb; pdb.set_trace()
+
         _acc = validate(model, dataset, iter_num + 1)
         dev_acc.append(_acc)
         log_message("===================================")
         log_message(colored("DEV ACC", "blue"))
         log_message(colored(str(dev_acc), "blue"))
+        if patience > 0:  # 0 means disabled
+            if _acc < best_acc:
+                patience_counter += 1
+                if patience_counter >= patience:
+                    log_message(colored("Loading best model...", "red"))
+                    model.load_model(best_model)
+                    patience_counter = 0
+            else:
+                best_model = model.save_model()
+                log_message(colored("Saving model...", "red"))
+                best_acc = _acc
+                patience_counter = 0
 
+    model.load_model(best_model)
+    log_message("===================================")
+    log_message(colored("BEST ACC: %s" % str(best_acc), "red"))
+    log_message(colored("BEST MODEL:", "red"))
+    log_message("L1 weights:", model.l1.prompt, "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
+    log_message("L2 weights:", model.l2.prompt, "\n-- This layer is " + ("trainable" if model.l2.trainable else "fixed"))
+    
 
 def train_dln(args):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")
@@ -148,14 +171,15 @@ def train_dln(args):
         task_info_str = "Solve the math world problem."
     else:
         raise NotImplementedError
-    model = DLN_2(task_info_str, fwd_model, bwd_model)
+    model = DLN_2(task_info_str, fwd_model, bwd_model, num_samples=args.num_samples)
 
     train(
         model=model,
         dataset=dataset,
         # loss_fn=loss_fn,
         batch_size=args.batch_size,
-        iters=args.iters
+        iters=args.iters,
+        patience=args.patience
     )
 
 
@@ -173,6 +197,8 @@ def main():
     parser.add_argument("--batch_size", type=int, default=10)
     parser.add_argument("--iters", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--patience", type=int, default=0)
+    parser.add_argument("--num_samples", type=int, default=5)
     parser.add_argument("--out_dir", type=str, default="./log", help="log directory")
     args = parser.parse_args()
     train_dln(args)
@@ -181,4 +207,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python main.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset subj --output_scoring_function accuracy --out_dir log/debug
+# python main.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset gsm8k --output_scoring_function accuracy --out_dir log/debug --max_train_size 400 --batch_size 20 --iters 50 --patience 2 --num_samples 20

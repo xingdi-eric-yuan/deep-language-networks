@@ -79,7 +79,7 @@ class BaseLayer(ABC):
     def prompt(self):
         return self.node.prompt
 
-    def _update_prompts(self, prompt):
+    def _update_prompt(self, prompt):
         self.node.update_prompt(prompt)
 
     def forward(self, inputs: Iterable[str], **kwargs) -> np.asarray:
@@ -113,7 +113,7 @@ class LanguageLayer(BaseLayer):
             # 2) rank the candidates
             best_prompt = self.scorer.get_best_prompt(pi_candidates, inputs, gt_outputs)
             # 3) update prompt with the best candidate
-            self._update_prompts(best_prompt)
+            self._update_prompt(best_prompt)
 
         # update inputs
         if is_first_layer:
@@ -131,13 +131,13 @@ class LanguageLayer(BaseLayer):
 
 class DLN_2(ABC):
 
-    def __init__(self, task, forward_evaluate, backward_evaluate):
+    def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
 
-        prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=4)
-        input_sampler = InputSampler(self.backward_evaluate, "ln_input_backward", num_samples=4)  # HiddenSampler hidden_backward
+        prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples)
+        input_sampler = InputSampler(self.backward_evaluate, "ln_input_backward", num_samples=num_samples)  # HiddenSampler hidden_backward
         scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer")
         scorer = LogProbsScorer(self.forward_evaluate, "ln_forward")
 
@@ -163,6 +163,14 @@ class DLN_2(ABC):
     
     def zero_grad(self):
         self.inputs, self.h, self.outputs = [], [], []
+
+    def save_model(self):
+        return [self.l1.node.prompt, self.l2.node.prompt]
+    
+    def load_model(self, init):
+        assert isinstance(init, list) and len(init) == 2
+        self.l1._update_prompt(init[0])
+        self.l2._update_prompt(init[1])
 
     def forward(self, x):
         # x: batch of strings
