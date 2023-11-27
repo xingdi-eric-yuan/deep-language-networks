@@ -23,8 +23,10 @@ def gsm8k_loss(y_hat, y):
     assert len(y_hat) == len(y)
     loss = []
     for i in range(len(y_hat)):
-        y_numbers = re.findall(r'\b\d+\b', y[i])
-        y_hat_numbers = re.findall(r'\b\d+\b', y_hat[i])
+        _y_hat, _y = y_hat[i].lower().strip(), y[i].lower().strip()
+        _y_hat, _y = _y_hat.replace(",", ""), _y.replace(",", "")
+        y_numbers = re.findall(r'\d+', _y)
+        y_hat_numbers = re.findall(r'\d+', _y_hat)
         if len(set(y_numbers) & set(y_hat_numbers)) > 0:
             loss.append(0.0)
         else:

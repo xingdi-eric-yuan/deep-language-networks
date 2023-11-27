@@ -157,7 +157,7 @@ class DLN_2(ABC):
             input_sampler=input_sampler,
             scorer=scorer_final_layer,
             init="Therefore, the answer is:",
-            trainable=False,
+            trainable=True,
         )
         self.inputs, self.h, self.outputs = [], [], []
     
