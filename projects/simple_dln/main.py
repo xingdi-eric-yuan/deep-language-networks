@@ -32,6 +32,20 @@ def gsm8k_loss(y_hat, y):
     return loss
 
 
+def subj_loss(y_hat, y):
+    # y_hat: a list of strings
+    # y: a list of strings
+    assert len(y_hat) == len(y)
+    loss = []
+    for i in range(len(y_hat)):
+        _y_hat, _y = y_hat[i].lower().strip(), y[i].lower().strip()
+        if len(_y_hat) > 0 and _y_hat == _y:
+            loss.append(0.0)
+        else:
+            loss.append(1.0)
+    return loss
+
+
 def validate(model, dataset: Dataset, iteration):
 
     log_message("===================================")
@@ -51,7 +65,13 @@ def validate(model, dataset: Dataset, iteration):
     for batch in dataset.iterate("dev", batch_size=20):
         x, y, _ = batch
         y_hat = model.forward(x)
-        losses = gsm8k_loss(y_hat, y)
+        if dataset.dataset_name == "gsm8k":
+            losses = gsm8k_loss(y_hat, y)
+        elif dataset.dataset_name == "subj":
+            losses = subj_loss(y_hat, y)
+        else:
+            raise NotImplementedError
+
         acc += len(y) - np.sum(losses)
         tot += len(y)
 
