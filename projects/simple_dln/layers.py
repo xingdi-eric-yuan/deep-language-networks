@@ -328,7 +328,6 @@ class DLN_2(ABC):
 
     def backward(self, gt):
         # gt: batch of strings
-        self.zero_grad()
         # l2
         l2_backward_info = [LNBackwardInfo(_i, _o, _gt) for _i, _o, _gt in zip(self.h, self.outputs, gt)]
         _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, is_first_layer=False)
