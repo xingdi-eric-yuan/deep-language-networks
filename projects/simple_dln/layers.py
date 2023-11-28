@@ -154,6 +154,7 @@ class WideLayer(BaseLayer):
         self.node_list: Node = [
             Node(i, forward_template, forward_evaluate) for i in init
         ]
+        self.forward_evaluate = forward_evaluate
         self.prompt_sampler = prompt_sampler
         self.input_sampler = input_sampler
         self.scorer = scorer
@@ -188,17 +189,17 @@ class WideLayer(BaseLayer):
         if self.aggregation == "concat":
             outputs = []
             for j in range(len(inputs[0])):  # batch size
-                batch_inputs = [inputs[i][j] for i in len(inputs)]
+                batch_inputs = [inputs[i][j] for i in range(len(inputs))]
                 outputs.append(self.aggregation_forward_template.render(inputs=batch_inputs))
             return outputs
         elif self.aggregation == "summary":
             llm_inputs = []
             for j in range(len(inputs[0])):  # batch size
-                batch_inputs = [inputs[i][j] for i in len(inputs)]
+                batch_inputs = [inputs[i][j] for i in range(len(inputs))]
                 llm_inputs.append(self.aggregation_forward_template.render(inputs=batch_inputs))
             summary = self.forward_evaluate(llm_inputs,
                                             async_generation=True,
-                                            **self.kwargs,)
+                                            **kwargs,)
             return summary
         else:
             raise NotImplementedError
@@ -374,7 +375,7 @@ class DWLN_2(ABC):
             init="Therefore, the answer is:",
             trainable=True,
         )
-        self.inputs, self.h, self.outputs = [], [], []
+        self.zero_grad()
     
     def zero_grad(self):
         self.inputs, self.h, self.outputs = [], [], []
@@ -397,7 +398,6 @@ class DWLN_2(ABC):
 
     def backward(self, gt):
         # gt: batch of strings
-        self.zero_grad()
         # l2
         l2_backward_info = [LNBackwardInfo(_i, _o, _gt) for _i, _o, _gt in zip(self.h, self.outputs, gt)]
         _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, is_first_layer=False)

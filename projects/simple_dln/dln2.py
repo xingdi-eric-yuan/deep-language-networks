@@ -52,8 +52,8 @@ def validate(model, dataset: Dataset, iteration):
 
     log_message("===================================")
     log_message(colored("VALIDATING... ITER %s" % str(iteration), "red"))
-    log_message("Current L1 weights:", model.l1.prompt_print, "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
-    log_message("Current L2 weights:", model.l2.prompt_print, "\n-- This layer is " + ("trainable" if model.l2.trainable else "fixed"))
+    log_message("Current L1 weights:", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
+    log_message("Current L2 weights:", model.l2.prompt_print(), "\n-- This layer is " + ("trainable" if model.l2.trainable else "fixed"))
 
     acc = 0.0
     tot = 0.0
@@ -105,13 +105,14 @@ def train(model, dataset: Dataset, batch_size, iters, patience):
         model.backward(y)
         log_message("===================================")
         log_message(colored("------- L1", "red"))
-        log_message(colored(model.l1.prompt_print, "red"))
+        log_message(colored(model.l1.prompt_print(), "red"))
         log_message(colored("------- L2", "red"))
-        log_message(colored(model.l2.prompt_print, "red"))
+        log_message(colored(model.l2.prompt_print(), "red"))
         for i, (a, b, c, d) in enumerate(zip(input, h, y_hat, y)):
             log_message("-------------------------------" + str(i))
             log_message(f"--------------\nx: {a}\nh: {b}\ny_hat: {c}\ny: {d}\n")
 
+        model.zero_grad()
         _acc = validate(model, dataset, iter_num + 1)
         dev_acc.append(_acc)
         log_message("===================================")
@@ -134,8 +135,8 @@ def train(model, dataset: Dataset, batch_size, iters, patience):
     log_message("===================================")
     log_message(colored("BEST ACC: %s" % str(best_acc), "red"))
     log_message(colored("BEST MODEL:", "red"))
-    log_message("L1 weights:", model.l1.prompt_print, "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
-    log_message("L2 weights:", model.l2.prompt_print, "\n-- This layer is " + ("trainable" if model.l2.trainable else "fixed"))
+    log_message("L1 weights:", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
+    log_message("L2 weights:", model.l2.prompt_print(), "\n-- This layer is " + ("trainable" if model.l2.trainable else "fixed"))
     
 
 def train_dln(args):
