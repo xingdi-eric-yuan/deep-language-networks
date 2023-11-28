@@ -215,6 +215,7 @@ class WideLayer(BaseLayer):
         previous_prompt = copy.copy(self.prompt)
 
         if self.aggregation == "concat":
+            # update prompts
             if self.trainable:
                 best_prompt_list = []
                 for _ in range(len(self.node_list)):
@@ -242,6 +243,7 @@ class WideLayer(BaseLayer):
             return previous_prompt, self.prompt, inputs, new_inputs
 
         elif self.aggregation == "summary":
+            # update prompts
             if self.trainable:
                 prompt_candidate_list = []
                 for _ in range(len(self.node_list)):
@@ -253,7 +255,7 @@ class WideLayer(BaseLayer):
                 # 2) rank the candidate tuples
                 best_prompt = self.scorer.get_best_prompt4WideSummary(all_prompt_tuples, inputs, gt_outputs, self.aggregation_forward_template)
                 # 3) update prompt all together
-                self._update_prompt(list(best_prompt_list))
+                self._update_prompt(list(best_prompt))
             # update inputs
             if is_first_layer:
                 return previous_prompt, self.prompt, inputs, inputs
@@ -656,9 +658,9 @@ class LogProbsScorer(Scorer):
             _first_step_context = self._render_context([prompts_candidates[j][i] for j in range(num_candidates)], inputs)  # num_candidates x inputs
             tmp = []
             for j in range(num_candidates):
-                tmp += self._forward_unique_evals(_first_step_context[j], forward=True)  # inputs
+                tmp += _first_step_context[j]  # inputs
             # tmp: num_candidates*inputs
-            h_list.append(tmp)  # num_nodes x num_candidates*inputs
+            h_list.append(self._forward_unique_evals(tmp, forward=True))  # num_nodes x num_candidates*inputs
         # now aggregate the h_list
         eval_batch = []
         gt_outputs_expand = gt_outputs * num_candidates
