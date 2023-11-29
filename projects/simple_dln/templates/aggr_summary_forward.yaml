@@ -1,12 +1,11 @@
 v1.0:
   template: |
-    # Input:
+    Summarize the following instructions, be accurate and concise.
+
+    # Instructions:
     {% for _inp in inputs %}
     - {{ _inp }}
     {% endfor %}
 
-    # Instruction:
-    Summarize the above inputs with concise language.
-
-    # Output:
+    # Summary:
     

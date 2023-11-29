@@ -251,9 +251,8 @@ class WideLayer(BaseLayer):
                     # 1) sample \pi proposals
                     pi_candidates = self.prompt_sampler(task, backward_info)
                     prompt_candidate_list.append(pi_candidates)
-                all_prompt_tuples = list(itertools.product(*prompt_candidate_list))  # num_candidates ^ num_nodes tuples, tuple size is num_nodes, this could be huge!!!
                 # 2) rank the candidate tuples
-                best_prompt = self.scorer.get_best_prompt4WideSummary(all_prompt_tuples, inputs, gt_outputs, self.aggregation_forward_template)
+                best_prompt = self.scorer.get_best_prompt4WideSummary(prompt_candidate_list, inputs, gt_outputs, self.aggregation_forward_template)
                 # 3) update prompt all together
                 self._update_prompt(list(best_prompt))
             # update inputs
@@ -645,26 +644,27 @@ class LogProbsScorer(Scorer):
         return best_input
 
     def get_best_prompt4WideSummary(self, prompts_candidates, inputs, gt_outputs, aggregation_forward_template, **kwargs):
-        # prompts_candidates: num_candidates tuples, each tuple contains num_nodes prompts
+        # prompts_candidates: num_nodes x num_candidates per node
         # inputs: num_inputs
         # gt_outputs: num_inputs
-        num_candidates = len(prompts_candidates)
-        num_nodes = len(prompts_candidates[0])
-        num_inputs = len(inputs)
+        num_nodes = len(prompts_candidates)
+        num_candidates_per_node = len(prompts_candidates[0])
+        num_inputs = len(inputs)  # also the number of gt_outputs
         # get the contexts for each node
         h_list = []
         for i in range(num_nodes):
-            _first_step_context = self._render_context([prompts_candidates[j][i] for j in range(num_candidates)], inputs)  # num_candidates x inputs
+            _first_step_context = self._render_context([prompts_candidates[i][j] for j in range(num_candidates_per_node)], inputs)  # num_candidates_per_node x inputs
             tmp = []
-            for j in range(num_candidates):
+            for j in range(num_candidates_per_node):
                 tmp += _first_step_context[j]  # inputs
             # tmp: num_candidates*inputs
-            h_list.append(self._forward_unique_evals(tmp, forward=True))  # num_nodes x num_candidates*inputs
+            h_list.append(self._forward_unique_evals(tmp, forward=True))
+        # h_list: num_nodes x num_candidates_per_node*inputs
         # now aggregate the h_list
         eval_batch = []
-        gt_outputs_expand = gt_outputs * num_candidates
+        gt_outputs_expand = gt_outputs * num_candidates_per_node
         contexts = []
-        for i in range(len(h_list[0])):
+        for i in range(len(h_list[0])):  # num_candidates_per_node*inputs
             _inputs = [h_list[j][i] for j in range(num_nodes)]
             _inputs = aggregation_forward_template.render(inputs=_inputs)
             contexts.append(_inputs)
@@ -673,8 +673,8 @@ class LogProbsScorer(Scorer):
         logprobs_results = self._get_logprobs_results(contexts, eval_results)  # num_candidates*inputs
 
         scores = logprobs_results.logp_targets.reshape(
-            num_candidates, num_inputs
+            num_candidates_per_node, num_inputs
         ).sum(axis=-1)  # num_candidates
         best_indexes = scores.argmax(axis=-1)  # 1
-        best_prompt = prompts_candidates[best_indexes]
+        best_prompt = [item[best_indexes] for item in prompts_candidates]  # num_nodes
         return best_prompt
