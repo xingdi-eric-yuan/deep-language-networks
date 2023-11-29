@@ -499,7 +499,10 @@ class Scorer(ABC):
             template_directory="./templates"
         )
         self.eval_kwargs = eval_kwargs or {}
-        self.forward_kwargs = {}
+        self.forward_kwargs = {
+            "temperature": 0,
+            "max_tokens": 512,
+        }
 
 
 class LogProbsScorer(Scorer):
