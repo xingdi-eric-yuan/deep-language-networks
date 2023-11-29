@@ -1,8 +1,8 @@
 v1.0:
   template: |
-    Summarize the following instructions, be accurate and concise.
+    You are working with a group of students to solve a problem. You have collected a set of thoughts from the group. Now, summarize these thoughts, make sure to include all opinions in your summary. 
 
-    # Instructions:
+    # Thoughts:
     {% for _inp in inputs %}
     - {{ _inp }}
     {% endfor %}
