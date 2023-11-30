@@ -292,7 +292,7 @@ class DLN_1(ABC):
             prompt_sampler=prompt_sampler,
             input_sampler=input_sampler,
             scorer=scorer_final_layer,
-            init="Therefore, the answer is:",
+            init="Let's think step by step.",
             trainable=True,
         )
         self.inputs, self.outputs = [], []
