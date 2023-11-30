@@ -14,7 +14,7 @@ from dln.dataset import Dataset, init_dataset
 from dln.operator import LLMRegistry
 
 from dln.vi.model import log_message
-from layers import DLN_2
+from layers import DLN_1
 
 
 def gsm8k_loss(y_hat, y):
@@ -53,7 +53,6 @@ def validate(model, dataset: Dataset, iteration):
     log_message("===================================")
     log_message(colored("VALIDATING... ITER %s" % str(iteration), "red"))
     log_message("Current L1 weights:", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
-    log_message("Current L2 weights:", model.l2.prompt_print(), "\n-- This layer is " + ("trainable" if model.l2.trainable else "fixed"))
 
     acc = 0.0
     tot = 0.0
@@ -93,7 +92,6 @@ def test(model, dataset: Dataset):
     log_message("===================================")
     log_message(colored("TESTING... ", "red"))
     log_message("Current L1 weights:", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
-    log_message("Current L2 weights:", model.l2.prompt_print(), "\n-- This layer is " + ("trainable" if model.l2.trainable else "fixed"))
 
     acc = 0.0
     tot = 0.0
@@ -138,16 +136,14 @@ def train(model, dataset: Dataset, batch_size, iters, patience):
     for iter_num in range(iters):
         x, y, _ = dataset.get_batch("train", batch_size, random_sample=True)
         y_hat = model.forward(x)
-        h, input, = model.h, model.inputs
+        input, = model.inputs
         model.backward(y)
         log_message("===================================")
         log_message(colored("------- L1", "red"))
         log_message(colored(model.l1.prompt_print(), "red"))
-        log_message(colored("------- L2", "red"))
-        log_message(colored(model.l2.prompt_print(), "red"))
-        for i, (a, b, c, d) in enumerate(zip(input, h, y_hat, y)):
+        for i, (a, b, c) in enumerate(zip(input, y_hat, y)):
             log_message("-------------------------------" + str(i))
-            log_message(f"--------------\nx: {a}\nh: {b}\ny_hat: {c}\ny: {d}\n")
+            log_message(f"--------------\nx: {a}\ny_hat: {b}\ny: {c}\n")
 
         model.zero_grad()
         _acc = validate(model, dataset, iter_num + 1)
@@ -175,7 +171,6 @@ def train(model, dataset: Dataset, batch_size, iters, patience):
     log_message(colored("TEST ACC: %s" % str(test_acc), "red"))
     log_message(colored("BEST MODEL:", "red"))
     log_message("L1 weights:", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
-    log_message("L2 weights:", model.l2.prompt_print(), "\n-- This layer is " + ("trainable" if model.l2.trainable else "fixed"))
 
 
 def train_dln(args):
@@ -213,7 +208,7 @@ def train_dln(args):
         task_info_str = "Solve the math world problem."
     else:
         raise NotImplementedError
-    model = DLN_2(task_info_str, fwd_model, bwd_model, num_samples=args.num_samples)
+    model = DLN_1(task_info_str, fwd_model, bwd_model, num_samples=args.num_samples)
 
     train(
         model=model,
@@ -249,4 +244,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python dln2.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset gsm8k --output_scoring_function accuracy --out_dir log/debug --max_train_size 400 --batch_size 20 --iters 50 --patience 2 --num_samples 20
+# python dln1.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset gsm8k --output_scoring_function accuracy --out_dir log/debug --max_train_size 400 --batch_size 20 --iters 50 --patience 2 --num_samples 20

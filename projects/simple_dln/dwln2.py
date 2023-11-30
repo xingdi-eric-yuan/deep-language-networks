@@ -88,6 +88,43 @@ def validate(model, dataset: Dataset, iteration):
     return dev_acc
 
 
+def test(model, dataset: Dataset):
+
+    log_message("===================================")
+    log_message(colored("TESTING... ", "red"))
+    log_message("Current L1 weights:", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
+    log_message("Current L2 weights:", model.l2.prompt_print(), "\n-- This layer is " + ("trainable" if model.l2.trainable else "fixed"))
+
+    acc = 0.0
+    tot = 0.0
+    pbar = tqdm.tqdm(
+        total=dataset.dev_size,
+        bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}",
+        desc="Eval",
+    )
+    dataset.reset_pointer("test")
+
+    for batch in dataset.iterate("test", batch_size=20):
+        x, y, _ = batch
+        y_hat = model.forward(x)
+        if dataset.dataset_name == "gsm8k":
+            losses = gsm8k_loss(y_hat, y)
+        elif dataset.dataset_name == "subj":
+            losses = subj_loss(y_hat, y)
+        else:
+            raise NotImplementedError
+
+        acc += len(y) - np.sum(losses)
+        tot += len(y)
+
+        pbar.update(len(y))
+        pbar.set_postfix_str(f"{acc / tot:.1%}")
+    
+    test_acc = acc / tot
+    log_message(colored("TEST ACC: {}".format(test_acc), "red"))
+    return test_acc
+
+
 def train(model, dataset: Dataset, batch_size, iters, patience):
 
     dev_acc = []
@@ -133,11 +170,13 @@ def train(model, dataset: Dataset, batch_size, iters, patience):
 
     model.load_model(best_model)
     log_message("===================================")
-    log_message(colored("BEST ACC: %s" % str(best_acc), "red"))
+    log_message(colored("BEST DEV ACC: %s" % str(best_acc), "red"))
+    test_acc = test(model, dataset)
+    log_message(colored("TEST ACC: %s" % str(test_acc), "red"))
     log_message(colored("BEST MODEL:", "red"))
     log_message("L1 weights:", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
     log_message("L2 weights:", model.l2.prompt_print(), "\n-- This layer is " + ("trainable" if model.l2.trainable else "fixed"))
-    
+
 
 def train_dln(args):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")
