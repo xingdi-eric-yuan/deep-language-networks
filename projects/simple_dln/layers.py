@@ -382,11 +382,12 @@ class DLN_2(ABC):
 
 class DWLN_2(ABC):
 
-    def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, aggregation="concat"):
+    def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, aggregation="concat", width=2):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
         self.aggregation = aggregation
+        self.width = width
 
         if self.aggregation == "concat":
             wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples)
@@ -400,6 +401,7 @@ class DWLN_2(ABC):
         input_sampler = InputSampler(self.backward_evaluate, "ln_input_backward", num_samples=num_samples)  # HiddenSampler hidden_backward
         scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer")
         scorer = LogProbsScorer(self.forward_evaluate, "ln_forward")
+        _init_list = ["Let's think step by step."] * self.width
 
         self.l1 = WideLayer(
             forward_evaluate,
@@ -407,7 +409,7 @@ class DWLN_2(ABC):
             prompt_sampler=wide_layer_prompt_sampler,
             input_sampler=wide_layer_input_sampler,
             scorer=scorer,
-            init=["Let's think step by step.", "Let's think step by step."],
+            init=_init_list,
             aggregation=self.aggregation,
             trainable=True,
         )

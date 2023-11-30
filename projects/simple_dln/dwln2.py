@@ -213,7 +213,7 @@ def train_dln(args):
         task_info_str = "Solve the math world problem."
     else:
         raise NotImplementedError
-    model = DWLN_2(task_info_str, fwd_model, bwd_model, num_samples=args.num_samples, aggregation=args.aggregation)
+    model = DWLN_2(task_info_str, fwd_model, bwd_model, num_samples=args.num_samples, aggregation=args.aggregation, width=args.width)
 
     train(
         model=model,
@@ -243,6 +243,7 @@ def main():
     parser.add_argument("--num_samples", type=int, default=5)
     parser.add_argument("--aggregation", type=str, default="concat")  # concat, summary
     parser.add_argument("--out_dir", type=str, default="./log", help="log directory")
+    parser.add_argument("--width", type=int, default=2)
     args = parser.parse_args()
     train_dln(args)
 
@@ -250,4 +251,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python dwln2.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset gsm8k --output_scoring_function accuracy --out_dir log/debug --max_train_size 400 --batch_size 20 --iters 50 --patience 2 --num_samples 20 --aggregation concat
+# python dwln2.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset gsm8k --output_scoring_function accuracy --out_dir log/debug --max_train_size 400 --batch_size 20 --iters 50 --patience 2 --num_samples 20 --aggregation concat --width 2

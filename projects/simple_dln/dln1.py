@@ -136,7 +136,7 @@ def train(model, dataset: Dataset, batch_size, iters, patience):
     for iter_num in range(iters):
         x, y, _ = dataset.get_batch("train", batch_size, random_sample=True)
         y_hat = model.forward(x)
-        input, = model.inputs
+        input = model.inputs
         model.backward(y)
         log_message("===================================")
         log_message(colored("------- L1", "red"))
