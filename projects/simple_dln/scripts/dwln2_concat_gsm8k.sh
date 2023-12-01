@@ -16,7 +16,7 @@ for width in 2 5 10; do
             --batch_size 20 \
             --iters 50 \
             --patience 2 \
-            --num_samples 20 \
+            --num_samples 10 \
             --aggregation concat \
             --seed ${seed} \
             --out_dir ${dir}/width${width} \

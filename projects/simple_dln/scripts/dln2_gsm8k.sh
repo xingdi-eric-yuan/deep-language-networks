@@ -15,7 +15,7 @@ for seed in 13 42 25; do
         --batch_size 20 \
         --iters 50 \
         --patience 2 \
-        --num_samples 20 \
+        --num_samples 10 \
         --seed ${seed} \
         --out_dir ${dir}
 done
