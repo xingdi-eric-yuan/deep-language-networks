@@ -230,7 +230,7 @@ def main():
     parser.add_argument("--dataset", type=str, default="gsm8k")
     parser.add_argument("--max_train_size", type=int, default=200)
     parser.add_argument("--max_dev_size", type=int, default=200)
-    parser.add_argument("--max_test_size", type=int, default=200)
+    parser.add_argument("--max_test_size", type=int, default=-1)
     parser.add_argument("--batch_size", type=int, default=10)
     parser.add_argument("--iters", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
