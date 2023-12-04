@@ -700,15 +700,18 @@ class LogProbsScorer(Scorer):
         num_nodes = len(prompts_candidates)
         num_candidates_per_node = len(prompts_candidates[0])
         num_inputs = len(inputs)  # also the number of gt_outputs
-        # get the contexts for each node
-        h_list = []
+
+        merged_context = []
         for i in range(num_nodes):
             _first_step_context = self._render_context([prompts_candidates[i][j] for j in range(num_candidates_per_node)], inputs)  # num_candidates_per_node x inputs
-            tmp = []
             for j in range(num_candidates_per_node):
-                tmp += _first_step_context[j]  # inputs
-            # tmp: num_candidates*inputs
-            h_list.append(self._forward_unique_evals(tmp, forward=True))
+                merged_context += _first_step_context[j]  # inputs
+        # merged_context: num_nodes*num_candidates*inputs
+        merged_h = self._forward_unique_evals(merged_context, forward=True)
+        # split the merged_h into num_nodes x num_nodes*num_candidates
+        h_list = []
+        for i in range(num_nodes):
+            h_list.append(merged_h[i*num_candidates_per_node*num_inputs:(i+1)*num_candidates_per_node*num_inputs])
         # h_list: num_nodes x num_candidates_per_node*inputs
         # now aggregate the h_list
         eval_batch = []
