@@ -218,16 +218,13 @@ class WideLayer(BaseLayer):
             # update prompts
             if self.trainable:
                 best_prompt_list = []
-                for _ in range(len(self.node_list)):
-                    # update \pi for each node independently, each of them aims to maximize the logprob of the target
-                    # 1) sample \pi proposals
-                    pi_candidates = self.prompt_sampler(task, backward_info)
-                    # 2) rank the candidates
-                    best_prompt = self.scorer.get_best_prompt(pi_candidates, inputs, gt_outputs)
-                    # 3) put best prompt into the list
-                    best_prompt_list.append(best_prompt)
-                # 4) update prompt all together
-                self._update_prompt(best_prompt_list)
+                # update \pi for each node independently, each of them aims to maximize the logprob of the target
+                # 1) sample \pi proposals
+                pi_candidates = self.prompt_sampler(task, backward_info)  # num_nodes*num_samples
+                # 2) rank the candidates, take top k, where k is num_nodes
+                best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, inputs, gt_outputs, self.width)
+                # 3) update the top k prompts
+                self._update_prompt(best_k_prompt)
 
             # update inputs
             if is_first_layer:
@@ -245,14 +242,16 @@ class WideLayer(BaseLayer):
         elif self.aggregation == "summary":
             # update prompts
             if self.trainable:
-                prompt_candidate_list = []
-                for _ in range(len(self.node_list)):
-                    # update \pi jointly, together they aim to maximize the logprob of the target
-                    # 1) sample \pi proposals
-                    pi_candidates = self.prompt_sampler(task, backward_info)
-                    prompt_candidate_list.append(pi_candidates)
+                # update \pi jointly, together they aim to maximize the logprob of the target
+                # 1) sample \pi proposals
+                pi_candidates = self.prompt_sampler(task, backward_info)  # num_nodes*num_samples
+                # split the pi_candidates into num_nodes lists
+                pi_candidates_list = []
+                num_samples = len(pi_candidates) // self.width
+                for i in range(self.width):
+                    pi_candidates_list.append(pi_candidates[i*num_samples:(i+1)*num_samples])
                 # 2) rank the candidate tuples
-                best_prompt = self.scorer.get_best_prompt4WideSummary(prompt_candidate_list, inputs, gt_outputs, self.aggregation_forward_template)
+                best_prompt = self.scorer.get_best_prompt4WideSummary(pi_candidates_list, inputs, gt_outputs, self.aggregation_forward_template)
                 # 3) update prompt all together
                 self._update_prompt(list(best_prompt))
             # update inputs
@@ -390,10 +389,10 @@ class DWLN_2(ABC):
         self.width = width
 
         if self.aggregation == "concat":
-            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples)
+            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples*self.width)
             wide_layer_input_sampler = InputSampler4WideConcat(self.backward_evaluate, "ln_input_backward", num_samples=num_samples)
         elif self.aggregation == "summary":
-            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples)
+            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples*self.width)
             wide_layer_input_sampler = InputSampler(self.backward_evaluate, "ln_input_backward", num_samples=num_samples)
         else:
             raise NotImplementedError
@@ -641,6 +640,23 @@ class LogProbsScorer(Scorer):
         best_indexes = scores.argmax(axis=-1)  # 1
         best_prompt = prompts_candidates[best_indexes]
         return best_prompt
+    
+    def get_best_k_prompt(self, prompts_candidates, inputs, gt_outputs, k, **kwargs):
+        # return the top-k prompts
+        assert k <= len(prompts_candidates)
+        num_candidates = len(prompts_candidates)
+        contexts = self._render_context(prompts_candidates, inputs)  # prompts_candidates x inputs
+        eval_batch = []
+        for i in range(num_candidates):
+            eval_batch += [f"{contexts[i][j]}\n{gt_outputs[j]}" for j in range(len(inputs))]
+        eval_results = self._forward_unique_evals(eval_batch)
+        logprobs_results = self._get_logprobs_results(contexts, eval_results)
+        scores = logprobs_results.logp_targets.reshape(
+            num_candidates, len(inputs)
+        ).sum(axis=-1)  # num_candidates
+        best_indices = scores.argsort(axis=-1)[-k:]  # k
+        best_prompts = [prompts_candidates[i] for i in best_indices]
+        return best_prompts
     
     def get_best_input(self, prompt, inputs, gt_output, **kwargs):
         contexts = self._render_context([prompt], inputs)[0]  # inputs
