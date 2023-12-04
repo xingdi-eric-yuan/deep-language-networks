@@ -114,6 +114,7 @@ class LanguageLayer(BaseLayer):
             # update \pi
             # 1) sample \pi proposals
             pi_candidates = self.prompt_sampler(task, backward_info)
+            pi_candidates += self.prompt  # add the current prompt
             # 2) rank the candidates
             best_prompt = self.scorer.get_best_prompt(pi_candidates, inputs, gt_outputs)
             # 3) update prompt with the best candidate
@@ -217,10 +218,10 @@ class WideLayer(BaseLayer):
         if self.aggregation == "concat":
             # update prompts
             if self.trainable:
-                best_prompt_list = []
                 # update \pi for each node independently, each of them aims to maximize the logprob of the target
                 # 1) sample \pi proposals
                 pi_candidates = self.prompt_sampler(task, backward_info)  # num_nodes*num_samples
+                pi_candidates += self.prompt
                 # 2) rank the candidates, take top k, where k is num_nodes
                 best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, inputs, gt_outputs, self.width)
                 # 3) update the top k prompts
@@ -250,6 +251,7 @@ class WideLayer(BaseLayer):
                 num_samples = len(pi_candidates) // self.width
                 for i in range(self.width):
                     pi_candidates_list.append(pi_candidates[i*num_samples:(i+1)*num_samples])
+                    pi_candidates_list[i] += self.prompt[i]  # add the current prompt
                 # 2) rank the candidate tuples
                 best_prompt = self.scorer.get_best_prompt4WideSummary(pi_candidates_list, inputs, gt_outputs, self.aggregation_forward_template)
                 # 3) update prompt all together
