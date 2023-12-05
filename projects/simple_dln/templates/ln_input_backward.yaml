@@ -17,5 +17,6 @@ v1.0:
     Given that the correct answer is:
     {{ target }}
 
-    Improve your analysis about the input to make it clearer and such that it reflects the correct answer and the context.
+    Sometimes your analysis contains multiple thoughts, some of which could be correct and some of which could be incorrect. Improve your analysis about the input to make it clearer and such that it reflects the correct answer and the context. 
     Refined analysis:
+    
