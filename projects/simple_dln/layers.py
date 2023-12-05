@@ -128,7 +128,7 @@ class LanguageLayer(BaseLayer):
         if self.trainable:
             # update \pi
             # 1) sample \pi proposals
-            pi_candidates = self.prompt_sampler(task, backward_info)
+            pi_candidates = self.prompt_sampler(self.prompt, backward_info)
             pi_candidates = np.concatenate([pi_candidates, np.asarray([self.prompt])])  # add the current prompt
             # 2) rank the candidates
             best_prompt = self.scorer.get_best_prompt(pi_candidates, inputs, gt_outputs)
@@ -234,8 +234,12 @@ class WideLayer(BaseLayer):
             # update prompts
             if self.trainable:
                 # update \pi for each node independently, each of them aims to maximize the logprob of the target
-                # 1) sample \pi proposals
-                pi_candidates = self.prompt_sampler(task, backward_info)  # num_nodes*num_samples
+                pi_candidates_list = []
+                for i in range(self.width):
+                    # 1) sample \pi proposals
+                    _pi_candidates = self.prompt_sampler(self.prompt[i], backward_info)
+                    pi_candidates_list = pi_candidates_list + _pi_candidates.tolist()
+                pi_candidates = np.asarray(pi_candidates_list)
                 pi_candidates = np.concatenate([pi_candidates, np.asarray(self.prompt)])  # add the current prompt
                 # 2) rank the candidates, take top k, where k is num_nodes
                 best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, inputs, gt_outputs, self.width)
@@ -259,14 +263,12 @@ class WideLayer(BaseLayer):
             # update prompts
             if self.trainable:
                 # update \pi jointly, together they aim to maximize the logprob of the target
-                # 1) sample \pi proposals
-                pi_candidates = self.prompt_sampler(task, backward_info)  # num_nodes*num_samples
-                # split the pi_candidates into num_nodes lists
                 pi_candidates_list = []
-                num_samples = len(pi_candidates) // self.width
                 for i in range(self.width):
-                    pi_candidates_list.append(pi_candidates[i*num_samples:(i+1)*num_samples])
-                    pi_candidates_list[i] = np.concatenate([pi_candidates_list[i], np.asarray([self.prompt[i]])])  # add the current prompt
+                    # 1) sample \pi proposals
+                    _pi_candidates = self.prompt_sampler(self.prompt[i], backward_info)
+                    _pi_candidates = np.concatenate([_pi_candidates, np.asarray([self.prompt[i]])])  # add the current prompt
+                    pi_candidates_list.append(_pi_candidates)
                 # 2) rank the candidate tuples
                 best_prompt = self.scorer.get_best_prompt4WideSummary(pi_candidates_list, inputs, gt_outputs, self.aggregation_forward_template)
                 # 3) update prompt all together
@@ -411,10 +413,10 @@ class DWLN_2(ABC):
         self.width = width
 
         if self.aggregation == "concat":
-            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples*self.width)
+            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples)
             wide_layer_input_sampler = InputSampler4WideConcat(self.backward_evaluate, "ln_input_backward", num_samples=num_samples)
         elif self.aggregation == "summary":
-            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples*self.width)
+            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples)
             wide_layer_input_sampler = InputSampler(self.backward_evaluate, "ln_input_backward", num_samples=num_samples)
         else:
             raise NotImplementedError
@@ -497,7 +499,7 @@ class Sampler(ABC):
 
 class PromptSampler(Sampler):
 
-    def sample(self, task, backward_info, **kwargs):
+    def sample(self, prompt, backward_info, **kwargs):
         """ Sample new prompts using the backward template.
             Returns a numpy array of shape (self.num_samples)
         """
@@ -505,7 +507,7 @@ class PromptSampler(Sampler):
         for _ in range(self.num_samples):
             tpl_inputs.append(
                 self.backward_template.render(
-                    task=task, backward_info=backward_info)
+                    prompt=prompt, backward_info=backward_info)
             )
 
         new_prompts = self.backward_evaluate(
