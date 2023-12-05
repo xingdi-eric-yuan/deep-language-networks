@@ -114,7 +114,7 @@ class LanguageLayer(BaseLayer):
             # update \pi
             # 1) sample \pi proposals
             pi_candidates = self.prompt_sampler(task, backward_info)
-            pi_candidates += self.prompt  # add the current prompt
+            pi_candidates += [self.prompt]  # add the current prompt
             # 2) rank the candidates
             best_prompt = self.scorer.get_best_prompt(pi_candidates, inputs, gt_outputs)
             # 3) update prompt with the best candidate
