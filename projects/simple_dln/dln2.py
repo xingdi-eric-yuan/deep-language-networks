@@ -250,4 +250,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python dln2.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset gsm8k --output_scoring_function accuracy --out_dir log/debug --max_train_size 400 --batch_size 20 --iters 50 --patience 2 --num_samples 20
+# python dln2.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset gsm8k --output_scoring_function accuracy --out_dir log/debug --max_train_size 400 --batch_size 20 --iters 50 --patience 2 --num_samples 10

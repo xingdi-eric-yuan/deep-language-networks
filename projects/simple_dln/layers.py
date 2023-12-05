@@ -17,6 +17,7 @@ class LogProbs:
 
 @dataclass
 class LNBackwardInfo:
+    first_step_input: str = None
     input: str = None
     output: str = None
     target: str = None
@@ -317,7 +318,7 @@ class DLN_1(ABC):
     def backward(self, gt):
         # gt: batch of strings
         # l1
-        l1_backward_info = [LNBackwardInfo(_i, _o, _gt) for _i, _o, _gt in zip(self.inputs, self.outputs, gt)]
+        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt) for _i0, _i, _o, _gt in zip(self.inputs, self.inputs, self.outputs, gt)]
         _ = self.l1.backward(self.task, l1_backward_info, is_first_layer=True)
 
 
@@ -374,11 +375,11 @@ class DLN_2(ABC):
     def backward(self, gt):
         # gt: batch of strings
         # l2
-        l2_backward_info = [LNBackwardInfo(_i, _o, _gt) for _i, _o, _gt in zip(self.h, self.outputs, gt)]
+        l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt) for _i0, _i, _o, _gt in zip(self.inputs, self.h, self.outputs, gt)]
         _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, is_first_layer=False)
         self.new_h = new_h
         # l1
-        l1_backward_info = [LNBackwardInfo(_i, _o, _gt) for _i, _o, _gt in zip(self.inputs, self.h, new_h)]
+        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt) for _i0, _i, _o, _gt in zip(self.inputs, self.inputs, self.h, new_h)]
         _ = self.l1.backward(self.task, l1_backward_info, is_first_layer=True)
 
 
@@ -448,11 +449,11 @@ class DWLN_2(ABC):
     def backward(self, gt):
         # gt: batch of strings
         # l2
-        l2_backward_info = [LNBackwardInfo(_i, _o, _gt) for _i, _o, _gt in zip(self.h, self.outputs, gt)]
+        l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt) for _i0, _i, _o, _gt in zip(self.inputs, self.h, self.outputs, gt)]
         _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, is_first_layer=False)
         self.new_h = new_h
         # l1
-        l1_backward_info = [LNBackwardInfo(_i, _o, _gt) for _i, _o, _gt in zip(self.inputs, self.h, new_h)]
+        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt) for _i0, _i, _o, _gt in zip(self.inputs, self.inputs, self.h, new_h)]
         _ = self.l1.backward(self.task, l1_backward_info, is_first_layer=True)
 
 
@@ -505,7 +506,7 @@ class InputSampler(Sampler):
         for _ in range(self.num_samples):
             tpl_inputs.append(
                 self.backward_template.render(
-                    prompt=prompt, target=backward_info.target, output=backward_info.output)
+                    prompt=prompt, input=backward_info.input, target=backward_info.target, output=backward_info.output)
             )
 
         sampled_inputs = self.backward_evaluate(

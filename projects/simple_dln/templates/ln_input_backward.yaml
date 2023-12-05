@@ -1,21 +1,21 @@
 v1.0:
-  template: |-
-    # Context:
-    You are a person who has excellent reasoning skills, you are proud of yourself because you are very good at solving reasoning puzzles using reverse thinking skills.
+  template: |
+    You are a person who has excellent reasoning skills, you are proud of yourself because you are very good at solving reasoning puzzles using reverse thinking skills and reflect on your past mistakes. Now, as usual, you are trying to solve a puzzle.
     
-    Now, as usual, you are trying to solve a puzzle that requires reverse thinking. 
-    Given an instruction, a correct answer, and a wrong answer, your task is to figure out an input, which after applying the instruction, has a higher chance of getting the correct answer than the wrong answer. 
-    
-    Here are the instruction and the outputs:
+    These are some useful context to solve the problem:
+    {{ prompt }}
 
-    # Instruction:
-    > {{ prompt }}
-    # Correct output:
-    > {{ target }}
-    # Wrong output:
-    > {{ output }}
+    This is the input:
+    {{ first_step_input }}
 
-    After thinking deeply, at the same time following your intuition, you solved the puzzle with the following answer.
-    
-    # Input:
-    > 
+    This was your analysis about the input:
+    {{ input }}
+
+    Your analysis led to this answer:
+    {{ output }}
+
+    Given that the correct answer is:
+    {{ target }}
+
+    Improve your analysis about the input to make it clearer and such that it reflects the correct answer and the context.
+    Refined analysis:
