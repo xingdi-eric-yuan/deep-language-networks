@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Iterable, List, Optional, Set
 import numpy as np
 import copy
+import re
 import itertools
 
 from dln.operator import LLM
@@ -21,6 +22,19 @@ class LNBackwardInfo:
     input: str = None
     output: str = None
     target: str = None
+    loss: float = None
+
+
+def gsm8k_loss(y_hat, y):
+    assert isinstance(y_hat, str) and isinstance(y, str)
+    _y_hat, _y = y_hat.lower().strip(), y.lower().strip()
+    _y_hat, _y = _y_hat.replace(",", ""), _y.replace(",", "")
+    y_numbers = re.findall(r'\d+', _y)
+    y_hat_numbers = re.findall(r'\d+', _y_hat)
+    if len(set(y_numbers) & set(y_hat_numbers)) > 0:
+        return 0.0
+    else:
+        return 1.0
 
 
 class Node(ABC):
@@ -317,8 +331,10 @@ class DLN_1(ABC):
 
     def backward(self, gt):
         # gt: batch of strings
+        # loss
+        losses = [gsm8k_loss(_o, _gt) for _o, _gt in zip(self.outputs, gt)]
         # l1
-        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt) for _i0, _i, _o, _gt in zip(self.inputs, self.inputs, self.outputs, gt)]
+        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.outputs, gt, losses)]
         _ = self.l1.backward(self.task, l1_backward_info, is_first_layer=True)
 
 
@@ -374,12 +390,14 @@ class DLN_2(ABC):
 
     def backward(self, gt):
         # gt: batch of strings
+        # loss
+        losses = [gsm8k_loss(_o, _gt) for _o, _gt in zip(self.outputs, gt)]
         # l2
-        l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt) for _i0, _i, _o, _gt in zip(self.inputs, self.h, self.outputs, gt)]
+        l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.h, self.outputs, gt, losses)]
         _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, is_first_layer=False)
         self.new_h = new_h
         # l1
-        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt) for _i0, _i, _o, _gt in zip(self.inputs, self.inputs, self.h, new_h)]
+        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.h, new_h, losses)]
         _ = self.l1.backward(self.task, l1_backward_info, is_first_layer=True)
 
 
@@ -448,12 +466,14 @@ class DWLN_2(ABC):
 
     def backward(self, gt):
         # gt: batch of strings
+        # loss
+        losses = [gsm8k_loss(_o, _gt) for _o, _gt in zip(self.outputs, gt)]
         # l2
-        l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt) for _i0, _i, _o, _gt in zip(self.inputs, self.h, self.outputs, gt)]
+        l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.h, self.outputs, gt, losses)]
         _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, is_first_layer=False)
         self.new_h = new_h
         # l1
-        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt) for _i0, _i, _o, _gt in zip(self.inputs, self.inputs, self.h, new_h)]
+        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.h, new_h, losses)]
         _ = self.l1.backward(self.task, l1_backward_info, is_first_layer=True)
 
 

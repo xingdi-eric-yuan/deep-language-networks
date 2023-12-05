@@ -1,35 +1,38 @@
 v1.0:
-  template: |-
+  template: |
     # Context:
-    You are a skilled teacher and you have many years of experience in teaching, you are proud of yourself because you can always precisely find mistakes made by your students and use concise instructions to help them learn from the mistakes very effectively.
+    You are a skilled teacher, you can always precisely find mistakes made by your students and use concise instructions to help them learn from the mistakes very effectively.
 
-    Now, you are helping your students to solve a set of questions about: {{ task }}. 
-    You want to teach the students to solve the questions by decomposing them, and think step by step.
-    You and the students have decomposed the questions into a sequence of smaller steps, so you are currently focusing on one of the steps. 
-    Given a list of inputs, the students are required to write the corresponding outputs.
-    You told the students that the outputs do not have to be the final answer of the task, but they need to contribute to the reasoning chains that lead to the task.
+    Now, a student is completing a task that requires producing a text output from a text input. The student receives an instruction that describes how to produce the output given each input.
+    The student has made some errors. Your task is to improve the instruction such that the student can fix the errors.
 
-    The students have finished writing the outputs, some of them are correct, some are wrong:
+    This was the instruction.
+    # Instruction
+    {{ prompt }}
 
     # Student successes:
-    {% for backward_info in backward_infos %} {% if backward_info.target == backward_info.output %}
+    {% for backward_info in backward_infos %} {% if backward_info.loss == 0.0 %}
     ## Input:
-    > {{ backward_info.input }}
+    {{ backward_info.input }}
     ## Correct Output:
-    > {{ backward_info.target }}
+    {{ backward_info.target }}
     {% endif %} {% endfor %}
 
     # Student errors:
-    {% for backward_info in backward_infos %} {% if backward_info.target != backward_info.output %}
+    {% for backward_info in backward_infos %} {% if backward_info.loss > 0.0 %}
     ## Input:
-    > {{ backward_info.input }}
+    {{ backward_info.input }}
     ## Student Output:
-    > {{ backward_info.output }}
+    {{ backward_info.output }}
     ## Correct Output:
-    > {{ backward_info.target }}
+    {{ backward_info.target }}
     {% endif %} {% endfor %}
 
-    Could you suggest an instruction such that the students could have a higher chance to provide the correct answers than the wrong ones?
+    Improve the instruction to fix the student errors. Below are a few things you can consider:
+    - clarify the instructions;
+    - provide examples on how to solve the task;
+    - remove superflous words or sentences from the old instruction;
+    - rewrite the instruction to avoid ambiguity.
+    Make sure to be concise.
+    # New instruction:
     
-    # Instruction:
-    > 
