@@ -351,10 +351,10 @@ class DLN_2(ABC):
             init="Therefore, the answer is:",
             trainable=True,
         )
-        self.inputs, self.h, self.outputs = [], [], []
+        self.zero_grad()
     
     def zero_grad(self):
-        self.inputs, self.h, self.outputs = [], [], []
+        self.inputs, self.h, self.new_h, self.outputs = [], [], [], []
 
     def save_model(self):
         return [self.l1.node.prompt, self.l2.node.prompt]
@@ -376,6 +376,7 @@ class DLN_2(ABC):
         # l2
         l2_backward_info = [LNBackwardInfo(_i, _o, _gt) for _i, _o, _gt in zip(self.h, self.outputs, gt)]
         _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, is_first_layer=False)
+        self.new_h = new_h
         # l1
         l1_backward_info = [LNBackwardInfo(_i, _o, _gt) for _i, _o, _gt in zip(self.inputs, self.h, new_h)]
         _ = self.l1.backward(self.task, l1_backward_info, is_first_layer=True)
@@ -426,7 +427,7 @@ class DWLN_2(ABC):
         self.zero_grad()
     
     def zero_grad(self):
-        self.inputs, self.h, self.outputs = [], [], []
+        self.inputs, self.h, self.new_h, self.outputs = [], [], [], []
 
     def save_model(self):
         return [item.prompt for item in self.l1.node_list] + [self.l2.node.prompt]
@@ -449,6 +450,7 @@ class DWLN_2(ABC):
         # l2
         l2_backward_info = [LNBackwardInfo(_i, _o, _gt) for _i, _o, _gt in zip(self.h, self.outputs, gt)]
         _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, is_first_layer=False)
+        self.new_h = new_h
         # l1
         l1_backward_info = [LNBackwardInfo(_i, _o, _gt) for _i, _o, _gt in zip(self.inputs, self.h, new_h)]
         _ = self.l1.backward(self.task, l1_backward_info, is_first_layer=True)

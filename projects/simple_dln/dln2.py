@@ -140,14 +140,15 @@ def train(model, dataset: Dataset, batch_size, iters, patience):
         y_hat = model.forward(x)
         h, input, = model.h, model.inputs
         model.backward(y)
+        new_h = model.new_h
         log_message("===================================")
         log_message(colored("------- L1", "red"))
         log_message(colored(model.l1.prompt_print(), "red"))
         log_message(colored("------- L2", "red"))
         log_message(colored(model.l2.prompt_print(), "red"))
-        for i, (a, b, c, d) in enumerate(zip(input, h, y_hat, y)):
+        for i, (a, b, c, d, e) in enumerate(zip(input, h, new_h, y_hat, y)):
             log_message("-------------------------------" + str(i))
-            log_message(f"--------------\nx: {a}\nh: {b}\ny_hat: {c}\ny: {d}\n")
+            log_message(f"--------------\nx: {a}\nh: {b}\nnew_h: {c}\ny_hat: {d}\ny: {e}\n")
 
         model.zero_grad()
         _acc = validate(model, dataset, iter_num + 1)

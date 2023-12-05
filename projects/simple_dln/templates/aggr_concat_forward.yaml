@@ -1,6 +1,7 @@
 v1.0:
   template: |-
     {% for _inp in inputs %}
-    - {{ _inp }}
+    ## Thought {{ loop.index }}:
+    {{ _inp }}
     {% endfor %}
     
