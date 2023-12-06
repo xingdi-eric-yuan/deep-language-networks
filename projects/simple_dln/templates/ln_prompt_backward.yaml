@@ -28,11 +28,6 @@ v1.0:
     {{ backward_info.target }}
     {% endif %} {% endfor %}
 
-    Improve the instruction to fix the student errors. Below are a few things you can consider:
-    - clarify the instructions;
-    - provide examples on how to solve the task;
-    - remove superflous words or sentences from the old instruction;
-    - rewrite the instruction to avoid ambiguity.
-    Make sure to be concise.
-    # New instruction:
+    Improve the instruction to fix the student errors. Make sure to be concise.
+    # Improved instruction:
     

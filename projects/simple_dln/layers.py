@@ -239,8 +239,11 @@ class WideLayer(BaseLayer):
                     # 1) sample \pi proposals
                     _pi_candidates = self.prompt_sampler(self.prompt[i], backward_info)
                     pi_candidates_list = pi_candidates_list + _pi_candidates.tolist()
+                pi_candidates_list = pi_candidates_list + self.prompt  # add the current prompt
+                pi_candidates_list = list(set(pi_candidates_list))
+                if len(pi_candidates_list) < self.width:
+                    pi_candidates_list = pi_candidates_list + self.prompt
                 pi_candidates = np.asarray(pi_candidates_list)
-                pi_candidates = np.concatenate([pi_candidates, np.asarray(self.prompt)])  # add the current prompt
                 # 2) rank the candidates, take top k, where k is num_nodes
                 best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, inputs, gt_outputs, self.width)
                 # 3) update the top k prompts
