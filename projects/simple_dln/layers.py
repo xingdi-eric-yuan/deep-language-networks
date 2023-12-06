@@ -131,7 +131,7 @@ class LanguageLayer(BaseLayer):
             pi_candidates = self.prompt_sampler(self.prompt, backward_info)
             pi_candidates = np.concatenate([pi_candidates, np.asarray([self.prompt])])  # add the current prompt
             # 2) rank the candidates
-            best_prompt = self.scorer.get_best_prompt(pi_candidates, inputs, gt_outputs)
+            best_prompt = self.scorer.get_best_prompt(pi_candidates, backward_info)
             # 3) update prompt with the best candidate
             self._update_prompt(best_prompt)
 
@@ -245,7 +245,7 @@ class WideLayer(BaseLayer):
                     pi_candidates_list = pi_candidates_list + self.prompt
                 pi_candidates = np.asarray(pi_candidates_list)
                 # 2) rank the candidates, take top k, where k is num_nodes
-                best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, inputs, gt_outputs, self.width)
+                best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, backward_info, self.width)
                 # 3) update the top k prompts
                 self._update_prompt(best_k_prompt)
 
@@ -273,7 +273,7 @@ class WideLayer(BaseLayer):
                     _pi_candidates = np.concatenate([_pi_candidates, np.asarray([self.prompt[i]])])  # add the current prompt
                     pi_candidates_list.append(_pi_candidates)
                 # 2) rank the candidate tuples
-                best_prompt = self.scorer.get_best_prompt4WideSummary(pi_candidates_list, inputs, gt_outputs, self.aggregation_forward_template)
+                best_prompt = self.scorer.get_best_prompt4WideSummary(pi_candidates_list, backward_info, self.aggregation_forward_template)
                 # 3) update prompt all together
                 self._update_prompt(list(best_prompt))
             # update inputs
@@ -656,7 +656,27 @@ class LogProbsScorer(Scorer):
         output_logprobs = [o if o != "empty" else min for o in output_logprobs]
         return LogProbs(np.asarray(output_logprobs), np.asarray(context_logprobs))  # TODO: reshape?
 
-    def get_best_prompt(self, prompts_candidates, inputs, gt_outputs, **kwargs):
+    def get_candidate_prompt_logprobs_contrastive(self, prompts_candidates, backward_info, **kwargs):
+        score_pos = self.get_candidate_prompt_logprobs(prompts_candidates, backward_info, **kwargs)
+        # now get neg scores
+        inputs = [item.input for item in backward_info if item.loss > 0.0]
+        wrong_outputs = [item.output for item in backward_info if item.loss > 0.0]
+        num_candidates = len(prompts_candidates)
+        contexts = self._render_context(prompts_candidates, inputs)  # prompts_candidates x inputs
+        eval_batch = []
+        for i in range(num_candidates):
+            eval_batch += [f"{contexts[i][j]}\n{wrong_outputs[j]}" for j in range(len(inputs))]
+        eval_results = self._forward_unique_evals(eval_batch)
+        logprobs_results = self._get_logprobs_results(contexts, eval_results)
+        score_neg = logprobs_results.logp_targets.reshape(
+            num_candidates, len(inputs)
+        ).mean(axis=-1)  # num_candidates
+        scores = score_pos - score_neg
+        return scores
+
+    def get_candidate_prompt_logprobs(self, prompts_candidates, backward_info, **kwargs):
+        inputs = [item.input for item in backward_info]
+        gt_outputs = [item.target for item in backward_info]
         num_candidates = len(prompts_candidates)
         contexts = self._render_context(prompts_candidates, inputs)  # prompts_candidates x inputs
         eval_batch = []
@@ -666,24 +686,19 @@ class LogProbsScorer(Scorer):
         logprobs_results = self._get_logprobs_results(contexts, eval_results)
         scores = logprobs_results.logp_targets.reshape(
             num_candidates, len(inputs)
-        ).sum(axis=-1)  # num_candidates
+        ).mean(axis=-1)  # num_candidates
+        return scores
+
+    def get_best_prompt(self, prompts_candidates, backward_info, **kwargs):
+        scores = self.get_candidate_prompt_logprobs_contrastive(prompts_candidates, backward_info, **kwargs)
         best_indexes = scores.argmax(axis=-1)  # 1
         best_prompt = prompts_candidates[best_indexes]
         return best_prompt
     
-    def get_best_k_prompt(self, prompts_candidates, inputs, gt_outputs, k, **kwargs):
+    def get_best_k_prompt(self, prompts_candidates, backward_info, k, **kwargs):
         # return the top-k prompts
         assert k <= len(prompts_candidates)
-        num_candidates = len(prompts_candidates)
-        contexts = self._render_context(prompts_candidates, inputs)  # prompts_candidates x inputs
-        eval_batch = []
-        for i in range(num_candidates):
-            eval_batch += [f"{contexts[i][j]}\n{gt_outputs[j]}" for j in range(len(inputs))]
-        eval_results = self._forward_unique_evals(eval_batch)
-        logprobs_results = self._get_logprobs_results(contexts, eval_results)
-        scores = logprobs_results.logp_targets.reshape(
-            num_candidates, len(inputs)
-        ).sum(axis=-1)  # num_candidates
+        scores = self.get_candidate_prompt_logprobs_contrastive(prompts_candidates, backward_info, **kwargs)
         best_indices = scores.argsort(axis=-1)[-k:]  # k
         best_prompts = [prompts_candidates[i] for i in best_indices]
         return best_prompts
@@ -739,7 +754,9 @@ class LogProbsScorer(Scorer):
         best_input = inputs[best_indexes]
         return best_input
 
-    def get_best_prompt4WideSummary(self, prompts_candidates, inputs, gt_outputs, aggregation_forward_template, **kwargs):
+    def get_best_prompt4WideSummary(self, prompts_candidates, backward_info, aggregation_forward_template, **kwargs):
+        inputs = [item.input for item in backward_info]
+        gt_outputs = [item.target for item in backward_info]
         # prompts_candidates: num_nodes x num_candidates per node
         # inputs: num_inputs
         # gt_outputs: num_inputs
