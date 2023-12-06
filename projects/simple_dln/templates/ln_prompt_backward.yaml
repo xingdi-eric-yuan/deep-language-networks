@@ -25,6 +25,6 @@ v1.0:
     Instruction:
     {{ prompt }}
 
-    Improve the above instruction to fix the student errors. Make sure to be concise.
+    Improve the above instruction to fix the student errors.
     Improved instruction:
     
