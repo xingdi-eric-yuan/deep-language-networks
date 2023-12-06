@@ -661,6 +661,8 @@ class LogProbsScorer(Scorer):
         # now get neg scores
         inputs = [item.input for item in backward_info if item.loss > 0.0]
         wrong_outputs = [item.output for item in backward_info if item.loss > 0.0]
+        if len(inputs) == 0:
+            return score_pos
         num_candidates = len(prompts_candidates)
         contexts = self._render_context(prompts_candidates, inputs)  # prompts_candidates x inputs
         eval_batch = []
