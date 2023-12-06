@@ -1,33 +1,32 @@
 v1.0:
   template: |
-    # Context:
     You are a skilled teacher, you can always precisely find mistakes made by your students and use concise instructions to help them learn from the mistakes very effectively.
 
     Now, a student is completing a task that requires producing a text output from a text input. The student receives an instruction that describes how to produce the output given each input.
     The student has made some errors. Your task is to improve the instruction such that the student can fix the errors.
 
     This was the instruction.
-    # Instruction
+    Instruction:
     {{ prompt }}
 
-    # Student successes:
+    These are some examples where the student produced the correct outputs.
     {% for backward_info in backward_infos %} {% if backward_info.loss == 0.0 %}
-    ## Input:
+    ## Input {{ loop.index }}:
     {{ backward_info.input }}
-    ## Correct Output:
+    ## Correct Output {{ loop.index }}:
     {{ backward_info.target }}
     {% endif %} {% endfor %}
 
-    # Student errors:
+    These are some examples where the student made errors.
     {% for backward_info in backward_infos %} {% if backward_info.loss > 0.0 %}
-    ## Input:
+    ## Input {{ loop.index }}:
     {{ backward_info.input }}
-    ## Student Output:
+    ## Student Output {{ loop.index }}:
     {{ backward_info.output }}
-    ## Correct Output:
+    ## Correct Output {{ loop.index }}:
     {{ backward_info.target }}
     {% endif %} {% endfor %}
 
     Improve the instruction to fix the student errors. Make sure to be concise.
-    # Improved instruction:
+    Improved instruction:
     
