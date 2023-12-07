@@ -65,6 +65,7 @@ class BaseLayer(ABC):
         scorer: "Scorer",
         init: str = None,
         trainable: bool = True,
+        parent_layer: "BaseLayer" = None,
         **kwargs,
     ):
         forward_template = load_template(
@@ -76,6 +77,7 @@ class BaseLayer(ABC):
         self.input_sampler = input_sampler
         self.scorer = scorer
         self.trainable = trainable
+        self.parent_layer = parent_layer
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
@@ -132,7 +134,7 @@ class LanguageLayer(BaseLayer):
             # 1) sample input proposals
             input_candidates = self.input_sampler(self.prompt, backward_info[i])  # num_samples
             # 2) rank the inputs
-            best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs[i])
+            best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs[i], backward_info[i].first_step_input, self.parent_layer.prompt if self.parent_layer is not None else None)
             # 3) collect new inputs
             new_inputs.append(best_input)
         return previous_prompt, self.prompt, inputs, new_inputs
@@ -363,6 +365,7 @@ class DLN_2(ABC):
             scorer=scorer_final_layer,
             init="Therefore, the answer is:",
             trainable=True,
+            parent_layer=self.l1,
         )
         self.zero_grad()
     
@@ -439,6 +442,7 @@ class DWLN_2(ABC):
             scorer=scorer_final_layer,
             init="Therefore, the answer is:",
             trainable=True,
+            parent_layer=self.l1,
         )
         self.zero_grad()
     
@@ -703,12 +707,28 @@ class LogProbsScorer(Scorer):
         best_prompts = [prompts_candidates[i] for i in best_indices]
         return best_prompts
     
-    def get_best_input(self, prompt, inputs, gt_output, **kwargs):
+    def get_best_input(self, prompt, inputs, gt_output, parent_input, parent_prompt, **kwargs):
+        # p(y|h)
         contexts = self._render_context([prompt], inputs)[0]  # inputs
         eval_batch = [f"{contexts[j]}\n{gt_output}" for j in range(len(inputs))]
         eval_results = self._forward_unique_evals(eval_batch)
-        logprobs_results = self._get_logprobs_results(contexts, eval_results)  # inputs
-        best_indexes = logprobs_results.logp_targets.argmax(axis=-1)  # 1
+        logprobs_y_given_h = self._get_logprobs_results(contexts, eval_results).logp_targets  # inputs
+        logprobs_results = logprobs_y_given_h
+        # p(h|x)
+        if parent_prompt is not None:
+            if isinstance(parent_prompt, str):
+                parent_prompt = [parent_prompt]  # 1 or n_nodes
+            parent_input = [parent_input] * len(inputs)  # inputs
+            contexts = self._render_context(parent_prompt, parent_input)  # parent_prompt x parent_input
+            eval_batch = []
+            for i in range(len(parent_prompt)):
+                eval_batch += [f"{contexts[i][j]}\n{inputs[j]}" for j in range(len(inputs))]
+            eval_results = self._forward_unique_evals(eval_batch)
+            logprobs_h_given_x = self._get_logprobs_results(contexts, eval_results).logp_targets  # parent_prompt x inputs
+            logprobs_h_given_x = logprobs_h_given_x.mean(axis=0)  # inputs
+            logprobs_results = logprobs_results + logprobs_h_given_x
+
+        best_indexes = logprobs_results.argmax(axis=-1)  # 1
         best_input = inputs[best_indexes]
         return best_input
 
