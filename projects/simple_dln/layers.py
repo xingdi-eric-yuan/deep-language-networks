@@ -725,9 +725,8 @@ class LogProbsScorer(Scorer):
                 eval_batch += [f"{contexts[i][j]}\n{inputs[j]}" for j in range(len(inputs))]
             eval_results = self._forward_unique_evals(eval_batch)
             logprobs_h_given_x = self._get_logprobs_results(contexts, eval_results).logp_targets  # parent_prompt x inputs
-            logprobs_h_given_x = logprobs_h_given_x.mean(axis=0)  # inputs
+            logprobs_h_given_x = logprobs_h_given_x.reshape(len(parent_prompt), len(inputs)).mean(axis=0)  # inputs
             logprobs_results = logprobs_results + logprobs_h_given_x
-
         best_indexes = logprobs_results.argmax(axis=-1)  # 1
         best_input = inputs[best_indexes]
         return best_input
