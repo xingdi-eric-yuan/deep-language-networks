@@ -117,7 +117,7 @@ class LanguageLayer(BaseLayer):
         if self.trainable:
             # update \pi
             # 1) sample \pi proposals
-            pi_candidates = self.prompt_sampler(self.prompt, backward_info)
+            pi_candidates = self.prompt_sampler(task, self.prompt, backward_info)
             pi_candidates = np.concatenate([pi_candidates, np.asarray([self.prompt])])  # add the current prompt
             # 2) rank the candidates
             best_prompt = self.scorer.get_best_prompt(pi_candidates, backward_info, contrastive=is_first_layer)
@@ -226,7 +226,7 @@ class WideLayer(BaseLayer):
                 pi_candidates_list = []
                 for i in range(self.width):
                     # 1) sample \pi proposals
-                    _pi_candidates = self.prompt_sampler(self.prompt[i], backward_info)
+                    _pi_candidates = self.prompt_sampler(task, self.prompt[i], backward_info)
                     pi_candidates_list = pi_candidates_list + _pi_candidates.tolist()
                 pi_candidates_list = pi_candidates_list + self.prompt  # add the current prompt
                 pi_candidates_list = list(set(pi_candidates_list))
@@ -258,7 +258,7 @@ class WideLayer(BaseLayer):
                 pi_candidates_list = []
                 for i in range(self.width):
                     # 1) sample \pi proposals
-                    _pi_candidates = self.prompt_sampler(self.prompt[i], backward_info)
+                    _pi_candidates = self.prompt_sampler(task, self.prompt[i], backward_info)
                     _pi_candidates = np.concatenate([_pi_candidates, np.asarray([self.prompt[i]])])  # add the current prompt
                     pi_candidates_list.append(_pi_candidates)
                 # 2) rank the candidate tuples
@@ -306,7 +306,7 @@ class DLN_1(ABC):
             init="Let's think step by step.",
             trainable=True,
         )
-        self.inputs, self.outputs = [], []
+        self.zero_grad()
     
     def zero_grad(self):
         self.inputs, self.outputs = [], []
@@ -494,7 +494,7 @@ class Sampler(ABC):
 
 class PromptSampler(Sampler):
 
-    def sample(self, prompt, backward_info, **kwargs):
+    def sample(self, task, prompt, backward_info, **kwargs):
         """ Sample new prompts using the backward template.
             Returns a numpy array of shape (self.num_samples)
         """
