@@ -1,5 +1,5 @@
 v1.0:
-  template: |
+  template: |-
     You are discussing with a group of students to solve a problem together. You are listening to the group and taking notes. Now, you want to present your thoughts on solving the problem. You can build your thoughts based on the opinions of others.
     
     {% for _inp in inputs %}

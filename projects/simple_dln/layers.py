@@ -569,7 +569,7 @@ class Scorer(ABC):
         self.eval_kwargs = eval_kwargs or {}
         self.forward_kwargs = {
             "temperature": 0,
-            "max_tokens": 1024,
+            "max_tokens": 256,
         }
 
 

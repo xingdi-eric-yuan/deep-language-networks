@@ -1,5 +1,5 @@
 v1.0:
-  template: |
+  template: |-
     A student is completing a task that requires producing a text output from a text input. The student receives an instruction that describes how to produce the output given each input.
     The student has made some errors. Your task is to improve the instruction such that the student can avoid similar errors in the future.
 
