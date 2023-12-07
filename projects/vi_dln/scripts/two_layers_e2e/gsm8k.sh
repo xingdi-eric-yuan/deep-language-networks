@@ -1,14 +1,14 @@
 #!/bin/bash
 set -x  # print commands to terminal
 
-fwd_model_type="text-davinci-003"
-bwd_model_type="text-davinci-003"
+fwd_model_type="gpt-35-turbo-instruct"
+bwd_model_type="gpt-35-turbo-instruct"
 dataset="gsm8k"
 loss_function="number_presence_loss"
 output_scoring_function="accuracy"
-max_train_size=300
-max_dev_size=300
-max_test_size=300
+max_train_size=400
+max_dev_size=200
+max_test_size=-1
 p_class_tpl="classify_forward:3.0"
 iters=10
 batch_size=10
@@ -30,7 +30,7 @@ bwd_max_tokens=512
 
 dir=log/${fwd_model_type}_${bwd_model_type}/two_layers_e2e/${dataset}
 
-for seed in 13 42 25; do
+for seed in 13; do
     python vi_main.py \
         --do_first_eval \
         --fwd_model_type ${fwd_model_type} \
