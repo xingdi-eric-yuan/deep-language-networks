@@ -692,7 +692,7 @@ class LogProbsScorer(Scorer):
         best_prompt = prompts_candidates[best_indexes]
         return best_prompt
     
-    def get_best_k_prompt(self, prompts_candidates, backward_info, contrastive=False, k, **kwargs):
+    def get_best_k_prompt(self, prompts_candidates, backward_info, k, contrastive=False, **kwargs):
         # return the top-k prompts
         assert k <= len(prompts_candidates)
         if contrastive:
