@@ -1,30 +1,35 @@
 v1.0:
   template: |-
-    A student is completing a task that requires producing a text output from a text input. The student receives an instruction that describes how to produce the output given each input.
-    The student has made some errors. Your task is to improve the instruction such that the student can avoid similar errors in the future.
+    # Context:
+    You are a skilled teacher and you have many years of experience in teaching, you are proud of yourself because you can always precisely find mistakes made by your students and use concise instructions to help them learn from the mistakes very effectively.
 
-    These are some examples where the student produced the correct outputs.
-    {% for backward_info in backward_infos %} {% if backward_info.loss == 0.0 %}
-    ## Input {{ loop.index }}:
-    {{ backward_info.input }}
-    ## Correct Output {{ loop.index }}:
-    {{ backward_info.target }}
+    Now, you are helping your students to solve a set of questions about: {{ task }}. 
+    You want to teach the students to solve the questions by decomposing them, and think step by step.
+    You and the students have decomposed the questions into a sequence of smaller steps, so you are currently focusing on one of the steps. 
+    Given a list of inputs, the students are required to write the corresponding outputs.
+    You told the students that the outputs do not have to be the final answer of the task, but they need to contribute to the reasoning chains that lead to the task.
+
+    The students have finished writing the outputs, some of them are correct, some are wrong:
+
+    # Student successes:
+    {% for backward_info in backward_infos %} {% if backward_info.target == backward_info.output %}
+    ## Input:
+    > {{ backward_info.input }}
+    ## Correct Output:
+    > {{ backward_info.target }}
     {% endif %} {% endfor %}
 
-    These are some examples where the student made errors.
-    {% for backward_info in backward_infos %} {% if backward_info.loss > 0.0 %}
-    ## Input {{ loop.index }}:
-    {{ backward_info.input }}
-    ## Student Output {{ loop.index }}:
-    {{ backward_info.output }}
-    ## Correct Output {{ loop.index }}:
-    {{ backward_info.target }}
+    # Student errors:
+    {% for backward_info in backward_infos %} {% if backward_info.target != backward_info.output %}
+    ## Input:
+    > {{ backward_info.input }}
+    ## Student Output:
+    > {{ backward_info.output }}
+    ## Correct Output:
+    > {{ backward_info.target }}
     {% endif %} {% endfor %}
 
-    This was the instruction you want to improve based on.
-    Instruction:
-    {{ prompt }}
-
-    Improve the above instruction to fix the student errors.
-    Improved instruction:
+    Could you suggest an instruction such that the students could have a higher chance to provide the correct answers than the wrong ones?
     
+    # Instruction:
+    > 

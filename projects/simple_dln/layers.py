@@ -502,7 +502,7 @@ class PromptSampler(Sampler):
         for _ in range(self.num_samples):
             tpl_inputs.append(
                 self.backward_template.render(
-                    prompt=prompt, backward_info=backward_info)
+                    task=task, prompt=prompt, backward_info=backward_info)
             )
 
         new_prompts = self.backward_evaluate(
