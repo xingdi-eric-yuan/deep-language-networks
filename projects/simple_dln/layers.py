@@ -120,7 +120,7 @@ class LanguageLayer(BaseLayer):
             pi_candidates = self.prompt_sampler(self.prompt, backward_info)
             pi_candidates = np.concatenate([pi_candidates, np.asarray([self.prompt])])  # add the current prompt
             # 2) rank the candidates
-            best_prompt = self.scorer.get_best_prompt(pi_candidates, backward_info)
+            best_prompt = self.scorer.get_best_prompt(pi_candidates, backward_info, contrastive=is_first_layer)
             # 3) update prompt with the best candidate
             self._update_prompt(best_prompt)
 
@@ -234,7 +234,7 @@ class WideLayer(BaseLayer):
                     pi_candidates_list = pi_candidates_list + self.prompt
                 pi_candidates = np.asarray(pi_candidates_list)
                 # 2) rank the candidates, take top k, where k is num_nodes
-                best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, backward_info, self.width)
+                best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, backward_info, self.width, contrastive=is_first_layer)
                 # 3) update the top k prompts
                 self._update_prompt(best_k_prompt)
 
@@ -683,16 +683,22 @@ class LogProbsScorer(Scorer):
         ).mean(axis=-1)  # num_candidates
         return scores
 
-    def get_best_prompt(self, prompts_candidates, backward_info, **kwargs):
-        scores = self.get_candidate_prompt_logprobs_contrastive(prompts_candidates, backward_info, **kwargs)
+    def get_best_prompt(self, prompts_candidates, backward_info, contrastive=False, **kwargs):
+        if contrastive:
+            scores = self.get_candidate_prompt_logprobs_contrastive(prompts_candidates, backward_info, **kwargs)
+        else:
+            scores = self.get_candidate_prompt_logprobs(prompts_candidates, backward_info, **kwargs)
         best_indexes = scores.argmax(axis=-1)  # 1
         best_prompt = prompts_candidates[best_indexes]
         return best_prompt
     
-    def get_best_k_prompt(self, prompts_candidates, backward_info, k, **kwargs):
+    def get_best_k_prompt(self, prompts_candidates, backward_info, contrastive=False, k, **kwargs):
         # return the top-k prompts
         assert k <= len(prompts_candidates)
-        scores = self.get_candidate_prompt_logprobs_contrastive(prompts_candidates, backward_info, **kwargs)
+        if contrastive:
+            scores = self.get_candidate_prompt_logprobs_contrastive(prompts_candidates, backward_info, **kwargs)
+        else:
+            scores = self.get_candidate_prompt_logprobs(prompts_candidates, backward_info, **kwargs)
         best_indices = scores.argsort(axis=-1)[-k:]  # k
         best_prompts = [prompts_candidates[i] for i in best_indices]
         return best_prompts
