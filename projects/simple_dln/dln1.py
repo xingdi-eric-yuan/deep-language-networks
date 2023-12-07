@@ -22,7 +22,7 @@ def validate(model, dataset: Dataset, iteration):
 
     log_message("===================================")
     log_message(colored("VALIDATING... ITER %s" % str(iteration), "red"))
-    log_message("Current L1 weights:", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
+    log_message("Current L1 weights:\n", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
 
     acc = 0.0
     tot = 0.0
@@ -57,7 +57,7 @@ def test(model, dataset: Dataset):
 
     log_message("===================================")
     log_message(colored("TESTING... ", "red"))
-    log_message("Current L1 weights:", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
+    log_message("Current L1 weights:\n", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
 
     acc = 0.0
     tot = 0.0
@@ -132,7 +132,7 @@ def train(model, dataset: Dataset, batch_size, iters, patience):
     test_acc = test(model, dataset)
     log_message(colored("TEST ACC: %s" % str(test_acc), "red"))
     log_message(colored("BEST MODEL:", "red"))
-    log_message("L1 weights:", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
+    log_message("L1 weights:\n", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
 
 
 def train_dln(args):

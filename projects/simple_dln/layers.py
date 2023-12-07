@@ -179,11 +179,11 @@ class WideLayer(BaseLayer):
         return [_n.prompt for _n in self.node_list]
 
     def prompt_print(self):
-        output = ""
+        output = []
         for i in range(self.width):
-            output += "--------------------------------\n"
-            output += f" - Node {i}: {self.node_list[i].prompt}\n"
-        return output
+            output.append("--------------------------------")
+            output.append(f" - Node {i}: {self.node_list[i].prompt}")
+        return "\n".join(output)
 
     def _update_prompt(self, prompts):
         assert isinstance(prompts, list) and len(prompts) == len(self.node_list)
