@@ -66,6 +66,8 @@ class BaseLayer(ABC):
         init: str = None,
         trainable: bool = True,
         parent_layer: "BaseLayer" = None,
+        contrastive: bool = False,
+        score_input_phx: bool = False,
         **kwargs,
     ):
         forward_template = load_template(
@@ -78,6 +80,8 @@ class BaseLayer(ABC):
         self.scorer = scorer
         self.trainable = trainable
         self.parent_layer = parent_layer
+        self.contrastive = contrastive
+        self.score_input_phx = score_input_phx
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
@@ -122,7 +126,7 @@ class LanguageLayer(BaseLayer):
             pi_candidates = self.prompt_sampler(task, self.prompt, backward_info)
             pi_candidates = np.concatenate([pi_candidates, np.asarray([self.prompt])])  # add the current prompt
             # 2) rank the candidates
-            best_prompt = self.scorer.get_best_prompt(pi_candidates, backward_info, contrastive=is_first_layer)
+            best_prompt = self.scorer.get_best_prompt(pi_candidates, backward_info, contrastive=is_first_layer and self.contrastive)
             # 3) update prompt with the best candidate
             self._update_prompt(best_prompt)
 
@@ -134,7 +138,10 @@ class LanguageLayer(BaseLayer):
             # 1) sample input proposals
             input_candidates = self.input_sampler(self.prompt, backward_info[i])  # num_samples
             # 2) rank the inputs
-            best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs[i], backward_info[i].first_step_input, self.parent_layer.prompt if self.parent_layer is not None else None)
+            if self.score_input_phx:
+                best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs[i], backward_info[i].first_step_input, self.parent_layer.prompt if self.parent_layer is not None else None)
+            else:
+                best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs[i], None, None)
             # 3) collect new inputs
             new_inputs.append(best_input)
         return previous_prompt, self.prompt, inputs, new_inputs
@@ -151,7 +158,8 @@ class WideLayer(BaseLayer):
         scorer: "Scorer",
         init: list = None,
         aggregation: str = "concat",
-        trainable: bool = True
+        trainable: bool = True,
+        contrastive: bool = False,
     ):
         forward_template = load_template(
             forward_template,
@@ -167,6 +175,7 @@ class WideLayer(BaseLayer):
         self.scorer = scorer
         self.trainable = trainable
         self.aggregation = aggregation
+        self.contrastive = contrastive
         assert self.aggregation in ["concat", "summary"]
         self.aggregation_forward_template = load_template(
             "aggr_" + self.aggregation + "_forward",
@@ -236,7 +245,7 @@ class WideLayer(BaseLayer):
                     pi_candidates_list = pi_candidates_list + self.prompt
                 pi_candidates = np.asarray(pi_candidates_list)
                 # 2) rank the candidates, take top k, where k is num_nodes
-                best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, backward_info, self.width, contrastive=is_first_layer)
+                best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, backward_info, self.width, contrastive=is_first_layer and self.contrastive)
                 # 3) update the top k prompts
                 self._update_prompt(best_k_prompt)
 
@@ -289,14 +298,15 @@ class WideLayer(BaseLayer):
 
 class DLN_1(ABC):
 
-    def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5):
+    def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5,
+                 prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0"):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
         self.loss_function = NumberPresenceLoss()
 
-        prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples)
-        input_sampler = InputSampler(self.backward_evaluate, "ln_input_backward", num_samples=num_samples)  # HiddenSampler hidden_backward
+        prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
+        input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples)  # HiddenSampler hidden_backward
         scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer")
 
         self.l1 = LanguageLayer(
@@ -337,14 +347,18 @@ class DLN_1(ABC):
 
 class DLN_2(ABC):
 
-    def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5):
+    def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, 
+                 prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0",
+                 first_layer_contrastive=False, score_input_phx=False):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
         self.loss_function = NumberPresenceLoss()
+        self.first_layer_contrastive = first_layer_contrastive
+        self.score_input_phx = score_input_phx
 
-        prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples)
-        input_sampler = InputSampler(self.backward_evaluate, "ln_input_backward", num_samples=num_samples)  # HiddenSampler hidden_backward
+        prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
+        input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples)  # HiddenSampler hidden_backward
         scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer")
         scorer = LogProbsScorer(self.forward_evaluate, "ln_forward")
 
@@ -356,6 +370,7 @@ class DLN_2(ABC):
             scorer=scorer,
             init="Let's think step by step.",
             trainable=True,
+            contrastive=self.first_layer_contrastive,
         )
         self.l2 = LanguageLayer(
             forward_evaluate,
@@ -402,24 +417,28 @@ class DLN_2(ABC):
 
 class DWLN_2(ABC):
 
-    def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, aggregation="concat", width=2):
+    def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, aggregation="concat", width=2, 
+                 prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0",
+                 first_layer_contrastive=False, score_input_phx=False):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
         self.aggregation = aggregation
         self.width = width
         self.loss_function = NumberPresenceLoss()
+        self.first_layer_contrastive = first_layer_contrastive
+        self.score_input_phx = score_input_phx
 
         if self.aggregation == "concat":
-            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples)
-            wide_layer_input_sampler = InputSampler4WideConcat(self.backward_evaluate, "ln_input_backward", num_samples=num_samples)
+            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
+            wide_layer_input_sampler = InputSampler4WideConcat(self.backward_evaluate, input_backward_template, num_samples=num_samples)
         elif self.aggregation == "summary":
-            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples)
-            wide_layer_input_sampler = InputSampler(self.backward_evaluate, "ln_input_backward", num_samples=num_samples)
+            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
+            wide_layer_input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples)
         else:
             raise NotImplementedError
-        prompt_sampler = PromptSampler(self.backward_evaluate, "ln_prompt_backward", num_samples=num_samples)
-        input_sampler = InputSampler(self.backward_evaluate, "ln_input_backward", num_samples=num_samples)  # HiddenSampler hidden_backward
+        prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
+        input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples)  # HiddenSampler hidden_backward
         scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer")
         scorer = LogProbsScorer(self.forward_evaluate, "ln_forward")
         _init_list = ["Let's think step by step."] * self.width

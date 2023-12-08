@@ -176,7 +176,9 @@ def train_dln(args):
         task_info_str = "Solve the math world problem."
     else:
         raise NotImplementedError
-    model = DLN_2(task_info_str, fwd_model, bwd_model, num_samples=args.num_samples)
+    model = DLN_2(task_info_str, fwd_model, bwd_model, num_samples=args.num_samples,
+                   prompt_backward_template=args.prompt_backward_template, input_backward_template=args.input_backward_template,
+                   first_layer_contrastive=args.first_layer_contrastive, score_input_phx=args.score_input_phx)
 
     train(
         model=model,
@@ -196,14 +198,18 @@ def main():
     parser.add_argument("--output_scoring_function", type=str)
     parser.add_argument("--data_dir", type=str, default="../../data")
     parser.add_argument("--dataset", type=str, default="gsm8k")
-    parser.add_argument("--max_train_size", type=int, default=200)
+    parser.add_argument("--prompt_backward_template", type=str, default="ln_prompt_backward:1.0")
+    parser.add_argument("--input_backward_template", type=str, default="ln_input_backward:1.0")
+    parser.add_argument("--max_train_size", type=int, default=400)
     parser.add_argument("--max_dev_size", type=int, default=200)
     parser.add_argument("--max_test_size", type=int, default=-1)
     parser.add_argument("--batch_size", type=int, default=10)
-    parser.add_argument("--iters", type=int, default=4)
+    parser.add_argument("--iters", type=int, default=10)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--patience", type=int, default=0)
     parser.add_argument("--num_samples", type=int, default=5)
+    parser.add_argument("--first_layer_contrastive", type=bool, default=False)
+    parser.add_argument("--score_input_phx", type=bool, default=False)
     parser.add_argument("--out_dir", type=str, default="./log", help="log directory")
     args = parser.parse_args()
     train_dln(args)
