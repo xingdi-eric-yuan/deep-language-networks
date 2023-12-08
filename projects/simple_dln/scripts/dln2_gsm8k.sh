@@ -15,7 +15,6 @@ for num_samples in 10 50; do
                     --fwd_model gpt-3-fwd \
                     --bwd_model gpt-3-bwd \
                     --dataset ${dataset} \
-                    --output_scoring_function accuracy \
                     --max_train_size 400 \
                     --batch_size 10 \
                     --iters 10 \

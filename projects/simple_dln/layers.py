@@ -160,6 +160,7 @@ class WideLayer(BaseLayer):
         aggregation: str = "concat",
         trainable: bool = True,
         contrastive: bool = False,
+        score_input_phx: bool = False,
     ):
         forward_template = load_template(
             forward_template,
@@ -176,6 +177,7 @@ class WideLayer(BaseLayer):
         self.trainable = trainable
         self.aggregation = aggregation
         self.contrastive = contrastive
+        self.score_input_phx = score_input_phx
         assert self.aggregation in ["concat", "summary"]
         self.aggregation_forward_template = load_template(
             "aggr_" + self.aggregation + "_forward",
@@ -371,6 +373,7 @@ class DLN_2(ABC):
             init="Let's think step by step.",
             trainable=True,
             contrastive=self.first_layer_contrastive,
+            score_input_phx=self.score_input_phx,
         )
         self.l2 = LanguageLayer(
             forward_evaluate,
@@ -381,6 +384,7 @@ class DLN_2(ABC):
             init="Therefore, the answer is:",
             trainable=True,
             parent_layer=self.l1,
+            score_input_phx=self.score_input_phx,
         )
         self.zero_grad()
     
@@ -452,6 +456,7 @@ class DWLN_2(ABC):
             init=_init_list,
             aggregation=self.aggregation,
             trainable=True,
+            score_input_phx=self.score_input_phx,
         )
         self.l2 = LanguageLayer(
             forward_evaluate,
@@ -462,6 +467,7 @@ class DWLN_2(ABC):
             init="Therefore, the answer is:",
             trainable=True,
             parent_layer=self.l1,
+            score_input_phx=self.score_input_phx,
         )
         self.zero_grad()
     

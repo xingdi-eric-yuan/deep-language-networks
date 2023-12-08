@@ -188,7 +188,6 @@ def main():
     parser.add_argument("--config", type=str)
     parser.add_argument("--fwd_model", type=str)
     parser.add_argument("--bwd_model", type=str)
-    parser.add_argument("--output_scoring_function", type=str)
     parser.add_argument("--data_dir", type=str, default="../../data")
     parser.add_argument("--dataset", type=str, default="gsm8k")
     parser.add_argument("--prompt_backward_template", type=str, default="ln_prompt_backward:1.0")
@@ -209,4 +208,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python dln1.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset gsm8k --output_scoring_function accuracy --out_dir log/debug --max_train_size 400 --batch_size 20 --iters 50 --patience 2 --num_samples 10
+# python dln1.py --config llm_config.yaml --fwd_model gpt-3-fwd --bwd_model gpt-3-bwd --dataset gsm8k --out_dir log/debug --max_train_size 400 --batch_size 20 --iters 50 --patience 2 --num_samples 10
