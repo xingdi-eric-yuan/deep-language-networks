@@ -361,8 +361,8 @@ class DLN_2(ABC):
 
         prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
         input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples)  # HiddenSampler hidden_backward
-        scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer")
-        scorer = LogProbsScorer(self.forward_evaluate, "ln_forward")
+        scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer", "ln_forward")
+        scorer = LogProbsScorer(self.forward_evaluate, "ln_forward", None)
 
         self.l1 = LanguageLayer(
             forward_evaluate,
@@ -589,12 +589,16 @@ class InputSampler4WideConcat(Sampler):
 
 class Scorer(ABC):
 
-    def __init__(self, forward_evaluate, forward_template, eval_kwargs=None):
+    def __init__(self, forward_evaluate, forward_template, previous_forward_template=None, eval_kwargs=None):
         self.forward_evaluate = forward_evaluate
         self.forward_template = load_template(
             forward_template,
             template_directory="./templates"
         )
+        self.previous_forward_template = load_template(
+            previous_forward_template,
+            template_directory="./templates"
+        ) if previous_forward_template is not None else None
         self.eval_kwargs = eval_kwargs or {}
         self.forward_kwargs = {
             "temperature": 0,
@@ -604,7 +608,7 @@ class Scorer(ABC):
 
 class LogProbsScorer(Scorer):
 
-    def __init__(self, forward_evaluate, forward_template, eval_kwargs=None):
+    def __init__(self, forward_evaluate, forward_template, previous_forward_template=None, eval_kwargs=None):
         eval_kwargs = {
             "temperature": 0,
             "max_tokens": 0,
@@ -612,14 +616,17 @@ class LogProbsScorer(Scorer):
             "return_logprobs": True,
             "raw_logprobs": True,
         }
-        super().__init__(forward_evaluate, forward_template, eval_kwargs)
+        super().__init__(forward_evaluate, forward_template, previous_forward_template, eval_kwargs)
 
-    def _render_context(self, prompts, inputs):
+    def _render_context(self, prompts, inputs, use_previous_forward_template=False):
         rendered_template = []
         for _p in prompts:
             rendered_template_per_prompt = []
             for _i in inputs:
-                fwd_rendered = self.forward_template.render(input=_i, prompt=_p)
+                if use_previous_forward_template:
+                    fwd_rendered = self.previous_forward_template.render(input=_i, prompt=_p)
+                else:
+                    fwd_rendered = self.forward_template.render(input=_i, prompt=_p)
                 rendered_template_per_prompt.append(fwd_rendered.replace('[END]', ''))  # TODO: clean prompt when generating, not here
             rendered_template.append(rendered_template_per_prompt)
         return rendered_template  # prompts x inputs
@@ -744,7 +751,7 @@ class LogProbsScorer(Scorer):
             if isinstance(parent_prompt, str):
                 parent_prompt = [parent_prompt]  # 1 or n_nodes
             parent_input = [parent_input] * len(inputs)  # inputs
-            contexts = self._render_context(parent_prompt, parent_input)  # parent_prompt x parent_input
+            contexts = self._render_context(parent_prompt, parent_input, use_previous_forward_template=True)  # parent_prompt x parent_input
             eval_batch = []
             for i in range(len(parent_prompt)):
                 eval_batch += [f"{contexts[i][j]}\n{inputs[j]}" for j in range(len(inputs))]
