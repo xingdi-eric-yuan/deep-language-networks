@@ -116,7 +116,7 @@ class LanguageLayer(BaseLayer):
     def prompt_print(self):
         return self.node.prompt
 
-    def backward(self, task, backward_info, is_first_layer=False):
+    def backward(self, task, backward_info, normalize_score=False, is_first_layer=False):
         inputs = [item.input for item in backward_info]
         gt_outputs = [item.target for item in backward_info]
         previous_prompt = copy.copy(self.prompt)
@@ -126,7 +126,7 @@ class LanguageLayer(BaseLayer):
             pi_candidates = self.prompt_sampler(task, self.prompt, backward_info)
             pi_candidates = np.concatenate([pi_candidates, np.asarray([self.prompt])])  # add the current prompt
             # 2) rank the candidates
-            best_prompt = self.scorer.get_best_prompt(pi_candidates, backward_info, contrastive=is_first_layer and self.contrastive)
+            best_prompt = self.scorer.get_best_prompt(pi_candidates, backward_info, contrastive=is_first_layer and self.contrastive, normalize=normalize_score)
             # 3) update prompt with the best candidate
             self._update_prompt(best_prompt)
 
@@ -139,9 +139,9 @@ class LanguageLayer(BaseLayer):
             input_candidates = self.input_sampler(self.prompt, backward_info[i])  # num_samples
             # 2) rank the inputs
             if self.score_input_phx:
-                best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs[i], backward_info[i].first_step_input, self.parent_layer.prompt if self.parent_layer is not None else None)
+                best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs[i], backward_info[i].first_step_input, self.parent_layer.prompt if self.parent_layer is not None else None, normalize=normalize_score)
             else:
-                best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs[i], None, None)
+                best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs[i], None, None, normalize=normalize_score)
             # 3) collect new inputs
             new_inputs.append(best_input)
         return previous_prompt, self.prompt, inputs, new_inputs
@@ -227,7 +227,7 @@ class WideLayer(BaseLayer):
         outputs = self.aggregate(outputs, **kwargs)
         return np.asarray(outputs)
 
-    def backward(self, task, backward_info, is_first_layer=False):
+    def backward(self, task, backward_info, normalize_score=False, is_first_layer=False):
         inputs = [item.input for item in backward_info]
         gt_outputs = [item.target for item in backward_info]
         previous_prompt = copy.copy(self.prompt)
@@ -247,7 +247,7 @@ class WideLayer(BaseLayer):
                     pi_candidates_list = pi_candidates_list + self.prompt
                 pi_candidates = np.asarray(pi_candidates_list)
                 # 2) rank the candidates, take top k, where k is num_nodes
-                best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, backward_info, self.width, contrastive=is_first_layer and self.contrastive)
+                best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, backward_info, self.width, contrastive=is_first_layer and self.contrastive, normalize=normalize_score)
                 # 3) update the top k prompts
                 self._update_prompt(best_k_prompt)
 
@@ -301,11 +301,12 @@ class WideLayer(BaseLayer):
 class DLN_1(ABC):
 
     def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5,
-                 prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0"):
+                 prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0", normalize_score=False):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
         self.loss_function = NumberPresenceLoss()
+        self.normalize_score = normalize_score
 
         prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
         input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples)  # HiddenSampler hidden_backward
@@ -344,20 +345,21 @@ class DLN_1(ABC):
         losses = self.loss_function(self.outputs, gt)
         # l1
         l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.outputs, gt, losses)]
-        _ = self.l1.backward(self.task, l1_backward_info, is_first_layer=True)
+        _ = self.l1.backward(self.task, l1_backward_info, normalize_score=self.normalize_score, is_first_layer=True)
 
 
 class DLN_2(ABC):
 
     def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, 
                  prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0",
-                 first_layer_contrastive=False, score_input_phx=False):
+                 first_layer_contrastive=False, score_input_phx=False, normalize_score=False):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
         self.loss_function = NumberPresenceLoss()
         self.first_layer_contrastive = first_layer_contrastive
         self.score_input_phx = score_input_phx
+        self.normalize_score = normalize_score
 
         prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
         input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples)  # HiddenSampler hidden_backward
@@ -412,18 +414,18 @@ class DLN_2(ABC):
         losses = self.loss_function(self.outputs, gt)
         # l2
         l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.h, self.outputs, gt, losses)]
-        _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, is_first_layer=False)
+        _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, normalize_score=self.normalize_score, is_first_layer=False)
         self.new_h = new_h
         # l1
         l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.h, new_h, losses)]
-        _ = self.l1.backward(self.task, l1_backward_info, is_first_layer=True)
+        _ = self.l1.backward(self.task, l1_backward_info, normalize_score=self.normalize_score, is_first_layer=True)
 
 
 class DWLN_2(ABC):
 
     def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, aggregation="concat", width=2, 
                  prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0",
-                 first_layer_contrastive=False, score_input_phx=False):
+                 first_layer_contrastive=False, score_input_phx=False, normalize_score=False):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
@@ -432,6 +434,7 @@ class DWLN_2(ABC):
         self.loss_function = NumberPresenceLoss()
         self.first_layer_contrastive = first_layer_contrastive
         self.score_input_phx = score_input_phx
+        self.normalize_score = normalize_score
 
         if self.aggregation == "concat":
             wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
@@ -496,11 +499,11 @@ class DWLN_2(ABC):
         losses = self.loss_function(self.outputs, gt)
         # l2
         l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.h, self.outputs, gt, losses)]
-        _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, is_first_layer=False)
+        _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, normalize_score=self.normalize_score, is_first_layer=False)
         self.new_h = new_h
         # l1
         l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.h, new_h, losses)]
-        _ = self.l1.backward(self.task, l1_backward_info, is_first_layer=True)
+        _ = self.l1.backward(self.task, l1_backward_info, normalize_score=self.normalize_score, is_first_layer=True)
 
 
 class Sampler(ABC):

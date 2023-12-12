@@ -178,7 +178,7 @@ def train_dln(args):
         raise NotImplementedError
     model = DWLN_2(task_info_str, fwd_model, bwd_model, num_samples=args.num_samples, aggregation=args.aggregation, width=args.width,
                    prompt_backward_template=args.prompt_backward_template, input_backward_template=args.input_backward_template,
-                   first_layer_contrastive=args.first_layer_contrastive, score_input_phx=args.score_input_phx)
+                   first_layer_contrastive=args.first_layer_contrastive, score_input_phx=args.score_input_phx, normalize_score=args.normalize_score)
 
     train(
         model=model,
@@ -212,6 +212,7 @@ def main():
     parser.add_argument("--width", type=int, default=2)
     parser.add_argument("--first_layer_contrastive", type=bool, default=False)
     parser.add_argument("--score_input_phx", type=bool, default=False)
+    parser.add_argument("--normalize_score", type=bool, default=False)
     args = parser.parse_args()
     train_dln(args)
 
