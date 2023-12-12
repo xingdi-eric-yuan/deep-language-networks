@@ -597,18 +597,19 @@ class HistoryScoreCache(object):
         self.reset()
 
     def push(self, stuff):
-        # stuff is a list of float.
-        assert isinstance(stuff, list)
-        self.memory = self.memory + stuff
+        # stuff is a np array of float.
+        assert isinstance(stuff, np.ndarray)
+        self.memory = self.memory + stuff.tolist()
         if len(self.memory) > self.capacity:
             self.memory = self.memory[-self.capacity:]
         
     def normalize(self, stuff):
-        assert isinstance(stuff, list)
+        assert isinstance(stuff, np.ndarray)
         self.push(stuff)
         mean = np.mean(np.array(self.memory))
         std = np.std(np.array(self.memory))
-        return [(s - mean) / (std + 1e-5) for s in stuff]
+        output = (stuff - mean) / (std + 1e-5)
+        return output
 
     def reset(self):
         self.memory = []
