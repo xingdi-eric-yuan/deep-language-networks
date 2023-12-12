@@ -587,6 +587,33 @@ class InputSampler4WideConcat(Sampler):
         return np.asarray(outputs)
 
 
+class HistoryScoreCache(object):
+    # this cache is used to store the most recent scores
+    def __init__(self, capacity=100):
+        self.capacity = capacity
+        self.reset()
+
+    def push(self, stuff):
+        # stuff is a list of float.
+        assert isinstance(stuff, list)
+        self.memory = self.memory + stuff
+        if len(self.memory) > self.capacity:
+            self.memory = self.memory[-self.capacity:]
+        
+    def normalize(self, stuff):
+        assert isinstance(stuff, list)
+        self.push(stuff)
+        mean = np.mean(np.array(self.memory))
+        std = np.std(np.array(self.memory))
+        return [(s - mean) / (std + 1e-5) for s in stuff]
+
+    def reset(self):
+        self.memory = []
+
+    def __len__(self):
+        return len(self.memory)
+
+
 class Scorer(ABC):
 
     def __init__(self, forward_evaluate, forward_template, previous_forward_template=None, eval_kwargs=None):
@@ -604,6 +631,9 @@ class Scorer(ABC):
             "temperature": 0,
             "max_tokens": 512,
         }
+        self.y_given_pi_pool = HistoryScoreCache(capacity=1000)
+        self.y_given_h_pool = HistoryScoreCache(capacity=1000)
+        self.h_given_x_pool = HistoryScoreCache(capacity=1000)
 
 
 class LogProbsScorer(Scorer):
@@ -684,8 +714,8 @@ class LogProbsScorer(Scorer):
         output_logprobs = [o if o != "empty" else min for o in output_logprobs]
         return LogProbs(np.asarray(output_logprobs), np.asarray(context_logprobs))  # TODO: reshape?
 
-    def get_candidate_prompt_logprobs_contrastive(self, prompts_candidates, backward_info, **kwargs):
-        score_pos = self.get_candidate_prompt_logprobs(prompts_candidates, backward_info, **kwargs)
+    def get_candidate_prompt_logprobs_contrastive(self, prompts_candidates, backward_info, normalize, **kwargs):
+        score_pos = self.get_candidate_prompt_logprobs(prompts_candidates, backward_info, normalize, **kwargs)
         # now get neg scores
         inputs = [item.input for item in backward_info if item.loss > 0.0]
         wrong_outputs = [item.output for item in backward_info if item.loss > 0.0]
@@ -701,10 +731,12 @@ class LogProbsScorer(Scorer):
         score_neg = logprobs_results.logp_targets.reshape(
             num_candidates, len(inputs)
         ).mean(axis=-1)  # num_candidates
+        if normalize:
+            score_neg = self.y_given_pi_pool.normalize(score_neg)
         scores = score_pos - score_neg
         return scores
 
-    def get_candidate_prompt_logprobs(self, prompts_candidates, backward_info, **kwargs):
+    def get_candidate_prompt_logprobs(self, prompts_candidates, backward_info, normalize, **kwargs):
         inputs = [item.input for item in backward_info]
         gt_outputs = [item.target for item in backward_info]
         num_candidates = len(prompts_candidates)
@@ -717,34 +749,38 @@ class LogProbsScorer(Scorer):
         scores = logprobs_results.logp_targets.reshape(
             num_candidates, len(inputs)
         ).mean(axis=-1)  # num_candidates
+        if normalize:
+            scores = self.y_given_pi_pool.normalize(scores)
         return scores
 
-    def get_best_prompt(self, prompts_candidates, backward_info, contrastive=False, **kwargs):
+    def get_best_prompt(self, prompts_candidates, backward_info, contrastive=False, normalize=False, **kwargs):
         if contrastive:
-            scores = self.get_candidate_prompt_logprobs_contrastive(prompts_candidates, backward_info, **kwargs)
+            scores = self.get_candidate_prompt_logprobs_contrastive(prompts_candidates, backward_info, normalize, **kwargs)
         else:
-            scores = self.get_candidate_prompt_logprobs(prompts_candidates, backward_info, **kwargs)
+            scores = self.get_candidate_prompt_logprobs(prompts_candidates, backward_info, normalize, **kwargs)
         best_indexes = scores.argmax(axis=-1)  # 1
         best_prompt = prompts_candidates[best_indexes]
         return best_prompt
     
-    def get_best_k_prompt(self, prompts_candidates, backward_info, k, contrastive=False, **kwargs):
+    def get_best_k_prompt(self, prompts_candidates, backward_info, k, contrastive=False, normalize=False, **kwargs):
         # return the top-k prompts
         assert k <= len(prompts_candidates)
         if contrastive:
-            scores = self.get_candidate_prompt_logprobs_contrastive(prompts_candidates, backward_info, **kwargs)
+            scores = self.get_candidate_prompt_logprobs_contrastive(prompts_candidates, backward_info, normalize, **kwargs)
         else:
-            scores = self.get_candidate_prompt_logprobs(prompts_candidates, backward_info, **kwargs)
+            scores = self.get_candidate_prompt_logprobs(prompts_candidates, backward_info, normalize, **kwargs)
         best_indices = scores.argsort(axis=-1)[-k:]  # k
         best_prompts = [prompts_candidates[i] for i in best_indices]
         return best_prompts
     
-    def get_best_input(self, prompt, inputs, gt_output, parent_input, parent_prompt, **kwargs):
+    def get_best_input(self, prompt, inputs, gt_output, parent_input, parent_prompt, normalize=False, **kwargs):
         # p(y|h)
         contexts = self._render_context([prompt], inputs)[0]  # inputs
         eval_batch = [f"{contexts[j]}\n{gt_output}" for j in range(len(inputs))]
         eval_results = self._forward_unique_evals(eval_batch)
         logprobs_y_given_h = self._get_logprobs_results(contexts, eval_results).logp_targets  # inputs
+        if normalize:
+            logprobs_y_given_h = self.y_given_h_pool.normalize(logprobs_y_given_h)
         logprobs_results = logprobs_y_given_h
         # p(h|x)
         if parent_prompt is not None:
@@ -758,6 +794,8 @@ class LogProbsScorer(Scorer):
             eval_results = self._forward_unique_evals(eval_batch)
             logprobs_h_given_x = self._get_logprobs_results(contexts, eval_results).logp_targets  # parent_prompt x inputs
             logprobs_h_given_x = logprobs_h_given_x.reshape(len(parent_prompt), len(inputs)).mean(axis=0)  # inputs
+            if normalize:
+                logprobs_h_given_x = self.h_given_x_pool.normalize(logprobs_h_given_x)
             logprobs_results = logprobs_results + logprobs_h_given_x
         best_indexes = logprobs_results.argmax(axis=-1)  # 1
         best_input = inputs[best_indexes]
