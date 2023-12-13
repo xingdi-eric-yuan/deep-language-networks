@@ -30,7 +30,8 @@ for skip_good_h in False True; do
                     --first_layer_contrastive ${first_layer_contrastive} \
                     --score_input_phx ${score_input_phx} \
                     --normalize_score ${normalize_score} \
-                    --normalize_by_length ${normalize_by_length}
+                    --normalize_by_length ${normalize_by_length} \
+                    --skip_good_h ${skip_good_h}
             done
         done
     done
