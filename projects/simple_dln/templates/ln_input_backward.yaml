@@ -5,7 +5,7 @@ v1.0:
     These are some useful context to solve the problem:
     {{ prompt }}
 
-    This is the input:
+    This was the input (the input is accurate and complete):
     {{ first_step_input }}
 
     This was your analysis about the input:
@@ -27,7 +27,7 @@ v2.0:
     These are some useful context to solve the problem:
     {{ prompt }}
 
-    This is the input:
+    This is the input (the input is accurate and complete):
     {{ first_step_input }}
 
     Your answer is:

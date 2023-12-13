@@ -178,7 +178,8 @@ def train_dln(args):
         raise NotImplementedError
     model = DLN_2(task_info_str, fwd_model, bwd_model, num_samples=args.num_samples,
                    prompt_backward_template=args.prompt_backward_template, input_backward_template=args.input_backward_template,
-                   first_layer_contrastive=args.first_layer_contrastive, score_input_phx=args.score_input_phx, normalize_score=args.normalize_score)
+                   first_layer_contrastive=args.first_layer_contrastive, score_input_phx=args.score_input_phx,
+                   normalize_score=args.normalize_score, skip_good_h=args.skip_good_h, normalize_by_length=args.normalize_by_length)
 
     train(
         model=model,
@@ -210,6 +211,8 @@ def main():
     parser.add_argument("--first_layer_contrastive", type=bool, default=False)
     parser.add_argument("--score_input_phx", type=bool, default=False)
     parser.add_argument("--normalize_score", type=bool, default=False)
+    parser.add_argument("--skip_good_h", type=bool, default=False)
+    parser.add_argument("--normalize_by_length", type=bool, default=True)
     parser.add_argument("--out_dir", type=str, default="./log", help="log directory")
     args = parser.parse_args()
     train_dln(args)

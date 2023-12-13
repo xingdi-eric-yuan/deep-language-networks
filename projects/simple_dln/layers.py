@@ -116,7 +116,7 @@ class LanguageLayer(BaseLayer):
     def prompt_print(self):
         return self.node.prompt
 
-    def backward(self, task, backward_info, normalize_score=False, is_first_layer=False):
+    def backward(self, task, backward_info, normalize_score=False, skip_good_h=False, is_first_layer=False):
         inputs = [item.input for item in backward_info]
         gt_outputs = [item.target for item in backward_info]
         previous_prompt = copy.copy(self.prompt)
@@ -135,6 +135,10 @@ class LanguageLayer(BaseLayer):
             return previous_prompt, self.prompt, inputs, inputs
         new_inputs = []
         for i in range(len(backward_info)):
+            if skip_good_h and backward_info[i].loss == 0:
+                new_inputs.append(inputs[i])
+                continue
+
             # 1) sample input proposals
             input_candidates = self.input_sampler(self.prompt, backward_info[i])  # num_samples
             # 2) rank the inputs
@@ -352,7 +356,8 @@ class DLN_2(ABC):
 
     def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, 
                  prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0",
-                 first_layer_contrastive=False, score_input_phx=False, normalize_score=False):
+                 first_layer_contrastive=False, score_input_phx=False, normalize_score=False, skip_good_h=False,
+                 normalize_by_length=True):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
@@ -360,11 +365,13 @@ class DLN_2(ABC):
         self.first_layer_contrastive = first_layer_contrastive
         self.score_input_phx = score_input_phx
         self.normalize_score = normalize_score
+        self.skip_good_h = skip_good_h
+        self.normalize_by_length = normalize_by_length
 
         prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
         input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples)  # HiddenSampler hidden_backward
-        scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer", "ln_forward")
-        scorer = LogProbsScorer(self.forward_evaluate, "ln_forward", None)
+        scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer", "ln_forward", self.normalize_by_length)
+        scorer = LogProbsScorer(self.forward_evaluate, "ln_forward", None, self.normalize_by_length)
 
         self.l1 = LanguageLayer(
             forward_evaluate,
@@ -414,7 +421,7 @@ class DLN_2(ABC):
         losses = self.loss_function(self.outputs, gt)
         # l2
         l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.h, self.outputs, gt, losses)]
-        _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, normalize_score=self.normalize_score, is_first_layer=False)
+        _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, normalize_score=self.normalize_score, is_first_layer=False, skip_good_h=self.skip_good_h)
         self.new_h = new_h
         # l1
         l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.h, new_h, losses)]
@@ -425,7 +432,7 @@ class DWLN_2(ABC):
 
     def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, aggregation="concat", width=2, 
                  prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0",
-                 first_layer_contrastive=False, score_input_phx=False, normalize_score=False):
+                 first_layer_contrastive=False, score_input_phx=False, normalize_score=False, skip_good_h=False):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
@@ -435,6 +442,7 @@ class DWLN_2(ABC):
         self.first_layer_contrastive = first_layer_contrastive
         self.score_input_phx = score_input_phx
         self.normalize_score = normalize_score
+        self.skip_good_h = skip_good_h
 
         if self.aggregation == "concat":
             wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
@@ -499,7 +507,7 @@ class DWLN_2(ABC):
         losses = self.loss_function(self.outputs, gt)
         # l2
         l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.h, self.outputs, gt, losses)]
-        _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, normalize_score=self.normalize_score, is_first_layer=False)
+        _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, normalize_score=self.normalize_score, is_first_layer=False, skip_good_h=self.skip_good_h)
         self.new_h = new_h
         # l1
         l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.h, new_h, losses)]
@@ -620,7 +628,7 @@ class HistoryScoreCache(object):
 
 class Scorer(ABC):
 
-    def __init__(self, forward_evaluate, forward_template, previous_forward_template=None, eval_kwargs=None):
+    def __init__(self, forward_evaluate, forward_template, previous_forward_template=None, eval_kwargs=None, normalzie_by_length=True):
         self.forward_evaluate = forward_evaluate
         self.forward_template = load_template(
             forward_template,
@@ -635,6 +643,7 @@ class Scorer(ABC):
             "temperature": 0,
             "max_tokens": 512,
         }
+        self.normalize_by_length = normalzie_by_length
         self.y_given_pi_pool = HistoryScoreCache(capacity=1000)
         self.y_given_h_pool = HistoryScoreCache(capacity=1000)
         self.h_given_x_pool = HistoryScoreCache(capacity=1000)
@@ -642,7 +651,7 @@ class Scorer(ABC):
 
 class LogProbsScorer(Scorer):
 
-    def __init__(self, forward_evaluate, forward_template, previous_forward_template=None, eval_kwargs=None):
+    def __init__(self, forward_evaluate, forward_template, previous_forward_template=None, eval_kwargs=None, normalize_by_length=True):
         eval_kwargs = {
             "temperature": 0,
             "max_tokens": 0,
@@ -650,7 +659,7 @@ class LogProbsScorer(Scorer):
             "return_logprobs": True,
             "raw_logprobs": True,
         }
-        super().__init__(forward_evaluate, forward_template, previous_forward_template, eval_kwargs)
+        super().__init__(forward_evaluate, forward_template, previous_forward_template, eval_kwargs, normalize_by_length)
 
     def _render_context(self, prompts, inputs, use_previous_forward_template=False):
         rendered_template = []
@@ -702,13 +711,15 @@ class LogProbsScorer(Scorer):
             if len(target_log_probs) == 0:
                 output_logprobs.append("empty")
             else:
-                output_logprobs.append(
-                    sum(target_log_probs) / (len(target_log_probs) + 1e-5)
-                )
+                sum_log_probs = sum(target_log_probs)
+                if self.normalize_by_length:
+                    sum_log_probs = sum_log_probs / (len(target_log_probs) + 1e-5)
+                output_logprobs.append(sum_log_probs)
 
-            context_logprobs.append(
-                sum(context_log_probs) / (len(context_log_probs) + 1e-5)
-            )
+            sum_log_probs = sum(context_log_probs)
+            if self.normalize_by_length:
+                sum_log_probs = sum_log_probs / (len(context_log_probs) + 1e-5)
+            context_logprobs.append(sum_log_probs)
 
         non_empty = [o for o in output_logprobs if o != "empty"]
         if len(non_empty) == 0:
