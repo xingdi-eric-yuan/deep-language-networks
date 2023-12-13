@@ -7,8 +7,9 @@ prompt_backward_template="ln_prompt_backward:2.0"  # "ln_prompt_backward:2.0"
 input_backward_template="ln_input_backward:1.0"  # "ln_input_backward:2.0"
 first_layer_contrastive=True
 num_samples=10
+normalize_score=True
 
-for normalize_score in False True; do
+for skip_good_h in False True; do
     for normalize_by_length in False True; do
         for score_input_phx in False True; do
             for seed in 13 42 25; do
@@ -23,7 +24,7 @@ for normalize_score in False True; do
                     --patience 2 \
                     --num_samples ${num_samples} \
                     --seed ${seed} \
-                    --out_dir ${dir}/${prompt_backward_template}_${input_backward_template}_contrastive${first_layer_contrastive}_phx${score_input_phx}_sample${num_samples}_norm${normalize_score}_lennorm${normalize_by_length} \
+                    --out_dir ${dir}/${prompt_backward_template}_${input_backward_template}_contrastive${first_layer_contrastive}_phx${score_input_phx}_sample${num_samples}_norm${normalize_score}_lennorm${normalize_by_length}_skiph${skip_good_h} \
                     --prompt_backward_template ${prompt_backward_template} \
                     --input_backward_template ${input_backward_template} \
                     --first_layer_contrastive ${first_layer_contrastive} \
