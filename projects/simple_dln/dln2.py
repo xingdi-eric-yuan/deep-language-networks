@@ -109,8 +109,10 @@ def train(model, dataset: Dataset, batch_size, iters, patience):
         log_message(colored("------- L2", "red"))
         log_message(colored(model.l2.prompt_print(), "red"))
         for i, (a, b, c, d, e) in enumerate(zip(input, h, new_h, y_hat, y)):
+            if b == c:
+                c = "--"
             log_message("-------------------------------" + str(i))
-            log_message(f"--------------\nx: {a}\nh: {b}\nnew_h: {c}\ny_hat: {d}\ny: {e}\n")
+            log_message(f"--------------\n**x:**\n{a}\n\n**h:**\n{b}\n\n**new_h:**\n{c}\n\n**y_hat:**\n{d}\n\n**y:**\n{e}\n\n")
 
         model.zero_grad()
         _acc = validate(model, dataset, iter_num + 1)
