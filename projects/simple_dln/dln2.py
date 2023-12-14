@@ -174,7 +174,7 @@ def train_dln(args):
     if args.dataset == "subj":
         task_info_str = "Read the following sentence, then choose whether it is subjective or objective."
     elif args.dataset == "gsm8k":
-        task_info_str = "Solve the math world problem."
+        task_info_str = "Solve the math word problem."
     else:
         raise NotImplementedError
     model = DLN_2(task_info_str, fwd_model, bwd_model, num_samples=args.num_samples,
