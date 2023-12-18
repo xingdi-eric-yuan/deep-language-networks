@@ -52,8 +52,8 @@ class Node(ABC):
             ]
         return tpl_inputs
 
-    def __call__(self, x, x_minus_one=None, **kwargs):
-        tpl_inputs = self.render_template(x, x_minus_one=x_minus_one)
+    def __call__(self, x, x0=None, **kwargs):
+        tpl_inputs = self.render_template(x, x0=x0)
         fwd_outputs = self.forward_evaluate(
             tpl_inputs,
             stop=self.forward_template.stop_tokens,
