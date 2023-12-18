@@ -142,10 +142,11 @@ class LanguageLayer(BaseLayer):
             # 1) sample input proposals
             input_candidates = self.input_sampler(self.prompt, backward_info[i])  # num_samples
             # 2) rank the inputs
-            if self.score_input_phx:
-                best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs[i], backward_info[i].first_step_input, self.parent_layer.prompt if self.parent_layer is not None else None, normalize=normalize_score)
-            else:
-                best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs[i], None, None, normalize=normalize_score)
+            best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs[i],
+                                                    backward_info[i].first_step_input, 
+                                                    self.parent_layer.prompt if self.parent_layer is not None else None, 
+                                                    normalize=normalize_score,
+                                                    phx=self.score_input_phx)
             # 3) collect new inputs
             new_inputs.append(best_input)
         return previous_prompt, self.prompt, inputs, new_inputs
@@ -600,7 +601,8 @@ class InputSampler(Sampler):
             step2_sampled_inputs = self.backward_evaluate(
                 tpl_inputs,
                 stop=self.diverse_h_sample_template.stop_tokens,
-                **kwargs,
+                temperature=0.7,
+                max_tokens=2000,
             )
             step2_sampled_inputs = ["\n".join([a, b]) for a, b in zip(tpl_inputs, step2_sampled_inputs)]
             # parse the sampled inputs
@@ -825,7 +827,7 @@ class LogProbsScorer(Scorer):
         best_prompts = [prompts_candidates[i] for i in best_indices]
         return best_prompts
     
-    def get_best_input(self, prompt, inputs, gt_output, parent_input, parent_prompt, normalize=False, **kwargs):
+    def get_best_input(self, prompt, inputs, gt_output, parent_input, parent_prompt, normalize=False, phx=False, **kwargs):
         # p(y|h)
         contexts = self._render_context([prompt], inputs)[0]  # inputs
         eval_batch = [f"{contexts[j]}\n{gt_output}" for j in range(len(inputs))]
@@ -835,7 +837,9 @@ class LogProbsScorer(Scorer):
             logprobs_y_given_h = self.y_given_h_pool.normalize(logprobs_y_given_h)
         logprobs_results = logprobs_y_given_h
         # p(h|x)
-        if parent_prompt is not None:
+        if phx is True:
+            assert parent_prompt is not None
+            assert parent_input is not None
             if isinstance(parent_prompt, str):
                 parent_prompt = [parent_prompt]  # 1 or n_nodes
             parent_input = [parent_input] * len(inputs)  # inputs
