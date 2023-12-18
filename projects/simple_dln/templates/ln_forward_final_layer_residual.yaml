@@ -1,0 +1,13 @@
+v1.0:
+  template: |-
+    # Input:
+    {{ first_step_input }}
+
+    # Reasoning:
+    {{ input }}
+
+    # Instruction:
+    {{ prompt }}
+
+    # Output (the number only):
+    

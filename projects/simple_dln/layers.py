@@ -36,16 +36,24 @@ class Node(ABC):
     def update_prompt(self, prompt):
         self.prompt = prompt
 
-    def render_template(self, x):
+    def render_template(self, x, x0=None):
         # x: batch x input_len
-        tpl_inputs = [
-            self.forward_template.render(input=i, prompt=self.prompt)
-            for i in x
-        ]
+        # x_minus_one: batch x input_len, or None
+        if x0 is None:
+            tpl_inputs = [
+                self.forward_template.render(input=i, prompt=self.prompt)
+                for i in x
+            ]
+        else:
+            assert len(x) == len(x0)  # batch size
+            tpl_inputs = [
+                self.forward_template.render(input=i, prompt=self.prompt, first_step_input=j)
+                for i, j in zip(x, x0)
+            ]
         return tpl_inputs
 
-    def __call__(self, x, **kwargs):
-        tpl_inputs = self.render_template(x)
+    def __call__(self, x, x_minus_one=None, **kwargs):
+        tpl_inputs = self.render_template(x, x_minus_one=x_minus_one)
         fwd_outputs = self.forward_evaluate(
             tpl_inputs,
             stop=self.forward_template.stop_tokens,
@@ -93,8 +101,8 @@ class BaseLayer(ABC):
     def _update_prompt(self, prompt):
         self.node.update_prompt(prompt)
 
-    def forward(self, inputs: Iterable[str], **kwargs) -> np.asarray:
-        outputs = self.node(inputs, **kwargs)
+    def forward(self, inputs: Iterable[str], first_step_input=None, **kwargs) -> np.asarray:
+        outputs = self.node(inputs, first_step_input, **kwargs)
         return np.asarray(outputs)
 
     def backward(self):
@@ -358,7 +366,7 @@ class DLN_2(ABC):
     def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, 
                  prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0",
                  first_layer_contrastive=False, score_input_phx=False, normalize_score=False, skip_good_h=False,
-                 normalize_by_length=True, diverse_h_sample=False):
+                 normalize_by_length=True, diverse_h_sample=False, residual=False):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
@@ -369,14 +377,20 @@ class DLN_2(ABC):
         self.skip_good_h = skip_good_h
         self.normalize_by_length = normalize_by_length
         self.diverse_h_sample = diverse_h_sample
+        self.residual = residual
 
         prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
         if self.diverse_h_sample:
             diverse_h_sample_template = "diverse_h_sample_template:1.0"
         else:
             diverse_h_sample_template = None
+
+        if self.residual:
+            l2_template = "ln_forward_final_layer_residual"
+        else:
+            l2_template = "ln_forward_final_layer"
         input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples, diverse_h_sample_template=diverse_h_sample_template)
-        scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer", "ln_forward", self.normalize_by_length)
+        scorer_final_layer = LogProbsScorer(self.forward_evaluate, l2_template, "ln_forward", self.normalize_by_length)
         scorer = LogProbsScorer(self.forward_evaluate, "ln_forward", None, self.normalize_by_length)
 
         self.l1 = LanguageLayer(
@@ -392,7 +406,7 @@ class DLN_2(ABC):
         )
         self.l2 = LanguageLayer(
             forward_evaluate,
-            "ln_forward_final_layer",
+            l2_template,
             prompt_sampler=prompt_sampler,
             input_sampler=input_sampler,
             scorer=scorer_final_layer,
@@ -418,7 +432,7 @@ class DLN_2(ABC):
         # x: batch of strings
         self.inputs = ["\n".join([self.task, _x]) for _x in x]
         self.h = self.l1(self.inputs)  # batch
-        self.outputs = self.l2(self.h)  # batch
+        self.outputs = self.l2(self.h, self.inputs if self.residual else None)  # batch
         return self.outputs
 
     def backward(self, gt):
@@ -700,15 +714,15 @@ class LogProbsScorer(Scorer):
         }
         super().__init__(forward_evaluate, forward_template, previous_forward_template, eval_kwargs, normalize_by_length)
 
-    def _render_context(self, prompts, inputs, use_previous_forward_template=False):
+    def _render_context(self, prompts, inputs, first_step_inputs, use_previous_forward_template=False):
         rendered_template = []
         for _p in prompts:
             rendered_template_per_prompt = []
-            for _i in inputs:
+            for _i, _i0 in zip(inputs, first_step_inputs):
                 if use_previous_forward_template:
                     fwd_rendered = self.previous_forward_template.render(input=_i, prompt=_p)
                 else:
-                    fwd_rendered = self.forward_template.render(input=_i, prompt=_p)
+                    fwd_rendered = self.forward_template.render(input=_i, prompt=_p, first_step_input=_i0)
                 rendered_template_per_prompt.append(fwd_rendered.replace('[END]', ''))  # TODO: clean prompt when generating, not here
             rendered_template.append(rendered_template_per_prompt)
         return rendered_template  # prompts x inputs
@@ -773,10 +787,11 @@ class LogProbsScorer(Scorer):
         # now get neg scores
         inputs = [item.input for item in backward_info if item.loss > 0.0]
         wrong_outputs = [item.output for item in backward_info if item.loss > 0.0]
+        first_step_inputs = [item.first_step_input for item in backward_info if item.loss > 0.0]
         if len(inputs) == 0:
             return score_pos
         num_candidates = len(prompts_candidates)
-        contexts = self._render_context(prompts_candidates, inputs)  # prompts_candidates x inputs
+        contexts = self._render_context(prompts_candidates, inputs, first_step_inputs)  # prompts_candidates x inputs
         eval_batch = []
         for i in range(num_candidates):
             eval_batch += [f"{contexts[i][j]}\n{wrong_outputs[j]}" for j in range(len(inputs))]
@@ -792,9 +807,10 @@ class LogProbsScorer(Scorer):
 
     def get_candidate_prompt_logprobs(self, prompts_candidates, backward_info, normalize, **kwargs):
         inputs = [item.input for item in backward_info]
+        first_step_inputs = [item.first_step_input for item in backward_info]
         gt_outputs = [item.target for item in backward_info]
         num_candidates = len(prompts_candidates)
-        contexts = self._render_context(prompts_candidates, inputs)  # prompts_candidates x inputs
+        contexts = self._render_context(prompts_candidates, inputs, first_step_inputs)  # prompts_candidates x inputs
         eval_batch = []
         for i in range(num_candidates):
             eval_batch += [f"{contexts[i][j]}\n{gt_outputs[j]}" for j in range(len(inputs))]
@@ -829,7 +845,7 @@ class LogProbsScorer(Scorer):
     
     def get_best_input(self, prompt, inputs, gt_output, parent_input, parent_prompt, normalize=False, phx=False, **kwargs):
         # p(y|h)
-        contexts = self._render_context([prompt], inputs)[0]  # inputs
+        contexts = self._render_context([prompt], inputs, [parent_input] * len(inputs))[0]  # inputs
         eval_batch = [f"{contexts[j]}\n{gt_output}" for j in range(len(inputs))]
         eval_results = self._forward_unique_evals(eval_batch)
         logprobs_y_given_h = self._get_logprobs_results(contexts, eval_results).logp_targets  # inputs
@@ -843,7 +859,7 @@ class LogProbsScorer(Scorer):
             if isinstance(parent_prompt, str):
                 parent_prompt = [parent_prompt]  # 1 or n_nodes
             parent_input = [parent_input] * len(inputs)  # inputs
-            contexts = self._render_context(parent_prompt, parent_input, use_previous_forward_template=True)  # parent_prompt x parent_input
+            contexts = self._render_context(parent_prompt, parent_input, parent_input, use_previous_forward_template=True)  # parent_prompt x parent_input
             eval_batch = []
             for i in range(len(parent_prompt)):
                 eval_batch += [f"{contexts[i][j]}\n{inputs[j]}" for j in range(len(inputs))]
