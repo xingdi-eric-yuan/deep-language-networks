@@ -10,9 +10,10 @@ num_samples=10
 normalize_score=True
 score_input_phx=True
 skip_good_h=True
+normalize_by_length=True
 
-for diverse_h_sample in True; do
-    for normalize_by_length in False True; do
+for residual in False True; do
+    for diverse_h_sample in False True; do
         for seed in 13 42 25; do
             python dln2.py \
                 --config llm_config.yaml \
@@ -25,7 +26,7 @@ for diverse_h_sample in True; do
                 --patience 2 \
                 --num_samples ${num_samples} \
                 --seed ${seed} \
-                --out_dir ${dir}/${prompt_backward_template}_${input_backward_template}_contrastive${first_layer_contrastive}_phx${score_input_phx}_sample${num_samples}_norm${normalize_score}_lennorm${normalize_by_length}_skiph${skip_good_h}_divh${diverse_h_sample} \
+                --out_dir ${dir}/${prompt_backward_template}_${input_backward_template}_contrastive${first_layer_contrastive}_phx${score_input_phx}_sample${num_samples}_norm${normalize_score}_lennorm${normalize_by_length}_skiph${skip_good_h}_divh${diverse_h_sample}_res${residual} \
                 --prompt_backward_template ${prompt_backward_template} \
                 --input_backward_template ${input_backward_template} \
                 --first_layer_contrastive ${first_layer_contrastive} \
@@ -33,7 +34,8 @@ for diverse_h_sample in True; do
                 --normalize_score ${normalize_score} \
                 --normalize_by_length ${normalize_by_length} \
                 --skip_good_h ${skip_good_h} \
-                --diverse_h_sample ${diverse_h_sample}
+                --diverse_h_sample ${diverse_h_sample} \
+                --residual ${residual}
         done
     done
 done
