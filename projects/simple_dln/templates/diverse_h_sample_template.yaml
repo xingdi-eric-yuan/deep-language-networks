@@ -1,0 +1,12 @@
+v1.0:
+  template: |-
+    Read the following input, provide five different ways to solve the problem. Make sure to be clear and specific.
+
+    Input:
+    {{ first_step_input }}
+
+    ## Solution 1:
+    {{ input }}
+
+    ## Solution 2:
+    

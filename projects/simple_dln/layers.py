@@ -357,7 +357,7 @@ class DLN_2(ABC):
     def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, 
                  prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0",
                  first_layer_contrastive=False, score_input_phx=False, normalize_score=False, skip_good_h=False,
-                 normalize_by_length=True):
+                 normalize_by_length=True, diverse_h_sample=False):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
@@ -367,9 +367,14 @@ class DLN_2(ABC):
         self.normalize_score = normalize_score
         self.skip_good_h = skip_good_h
         self.normalize_by_length = normalize_by_length
+        self.diverse_h_sample = diverse_h_sample
 
         prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
-        input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples)  # HiddenSampler hidden_backward
+        if self.diverse_h_sample:
+            diverse_h_sample_template = "diverse_h_sample_template:1.0"
+        else:
+            diverse_h_sample_template = None
+        input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples, diverse_h_sample_template=diverse_h_sample_template)
         scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer", "ln_forward", self.normalize_by_length)
         scorer = LogProbsScorer(self.forward_evaluate, "ln_forward", None, self.normalize_by_length)
 
@@ -516,13 +521,20 @@ class DWLN_2(ABC):
 
 class Sampler(ABC):
 
-    def __init__(self, backward_evaluate, backward_template, num_samples=4):
+    def __init__(self, backward_evaluate, backward_template, num_samples=4, diverse_h_sample_template=None):
         self.backward_evaluate = backward_evaluate
         self.backward_template = load_template(
             backward_template,
             template_directory="./templates"
         )
         self.num_samples = num_samples
+        if diverse_h_sample_template is not None:
+            self.diverse_h_sample_template = load_template(
+                diverse_h_sample_template,
+                template_directory="./templates"
+            )
+        else:
+            self.diverse_h_sample_template = None
 
     def __call__(self, *args, **kwargs):
         return self.sample(*args, **kwargs)
@@ -555,6 +567,12 @@ class PromptSampler(Sampler):
 
 class InputSampler(Sampler):
 
+    def parse_diverse_h(self, input):
+        # author: copilot
+        hs = re.findall(r'## Solution \d+:\n(.*?)(?=## Solution \d+:|$)', input, re.DOTALL)
+        hs = [h.strip() for h in hs]
+        return hs
+
     def sample(self, prompt, backward_info, **kwargs):
         """ Sample new inputs using the backward template.
             Returns a numpy array of shape (self.num_samples)
@@ -571,6 +589,25 @@ class InputSampler(Sampler):
             stop=self.backward_template.stop_tokens,
             **kwargs,
         )
+        if self.diverse_h_sample_template is not None:
+            tpl_inputs = []
+            for i in range(self.num_samples):
+                tpl_inputs.append(
+                    self.diverse_h_sample_template.render(
+                        first_step_input=backward_info.first_step_input, input=sampled_inputs[i])
+                )
+
+            step2_sampled_inputs = self.backward_evaluate(
+                tpl_inputs,
+                stop=self.diverse_h_sample_template.stop_tokens,
+                **kwargs,
+            )
+            step2_sampled_inputs = ["\n".join([a, b]) for a, b in zip(tpl_inputs, step2_sampled_inputs)]
+            # parse the sampled inputs
+            sampled_inputs = []
+            for i in range(self.num_samples):
+                sampled_inputs += self.parse_diverse_h(step2_sampled_inputs[i])
+
         return np.asarray(sampled_inputs)
 
 
