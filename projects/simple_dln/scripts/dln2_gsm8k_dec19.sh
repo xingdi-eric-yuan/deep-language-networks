@@ -3,7 +3,7 @@ set -x  # print commands to terminal
 
 dataset="gsm8k"
 dir=log/dec19/dln2/${dataset}
-prompt_backward_template="ln_prompt_backward:2.0"  # "ln_prompt_backward:2.0"
+prompt_backward_template="ln_prompt_backward:1.0"  # "ln_prompt_backward:2.0"
 input_backward_template="ln_input_backward:1.0"  # "ln_input_backward:2.0"
 first_layer_contrastive=True
 num_samples=10
