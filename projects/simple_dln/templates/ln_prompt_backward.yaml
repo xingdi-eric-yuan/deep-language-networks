@@ -1,15 +1,11 @@
 v1.0:
   template: |-
-    # Context:
-    You are a skilled teacher and you have many years of experience in teaching, you are proud of yourself because you can always precisely find mistakes made by your students and use concise instructions to help them learn from the mistakes very effectively.
+    A student is completing a task that requires producing a text output from a text input. The student receives an instruction that describes how to produce the output given each input.
+    The student has made some errors. Your task is to improve the instruction such that the student can fix the errors. Note that the instruction should not be too specific, otherwise the student will not learn how to solve similar tasks in the future.
 
-    Now, you are helping your students to solve a set of questions about: {{ task }}.
-    You want to teach the students to solve the questions by decomposing them, and think step by step.
-    You and the students have decomposed the questions into a sequence of smaller steps, so you are currently focusing on one of the steps.
-    Given a list of inputs, the students are required to write the corresponding outputs.
-    You told the students that the outputs do not have to be the final answer of the task, but they need to contribute to the reasoning chains that lead to the task.
-
-    The students have finished writing the outputs, some of them are correct, some are wrong:
+    This was the instruction.
+    # Instruction
+    > {{ prompt }}
 
     # Student successes:
     {% for backward_info in backward_infos %} {% if backward_info.loss == 0 %}
@@ -29,26 +25,14 @@ v1.0:
     > {{ backward_info.target }}
     {% endif %} {% endfor %}
 
-    # Original instruction:
-    > {{ prompt }}
-
-    Could you improve based on the original instruction such that the students could have a higher chance to provide the correct answers than the wrong ones?
-
-    # Refined instruction:
+    Improve the instruction to fix the student errors. Avoid providing instructions that are specific to one example, because that may not be useful for the student to solve similar tasks in the future.
+    ## Improved instruction
     >
 
 v2.0:
   template: |-
-    # Context:
-    You are a skilled teacher and you have many years of experience in teaching, you are proud of yourself because you can always precisely find mistakes made by your students and use concise instructions to help them learn from the mistakes very effectively.
-
-    Now, you are helping your students to solve a set of questions about: {{ task }}.
-    You want to teach the students to solve the questions by decomposing them, and think step by step.
-    You and the students have decomposed the questions into a sequence of smaller steps, so you are currently focusing on one of the steps.
-    Given a list of inputs, the students are required to write the corresponding outputs.
-    You told the students that the outputs do not have to be the final answer of the task, but they need to contribute to the reasoning chains that lead to the task.
-
-    The students have finished writing the outputs, some of them are correct, some are wrong:
+    A student is completing a task that requires producing a text output from a text input. 
+    The student has made some errors. Your task is to suggest an instruction such that the student can fix the errors. Note that the instruction should not be too specific, otherwise the student will not learn how to solve similar tasks in the future.
 
     # Student successes:
     {% for backward_info in backward_infos %} {% if backward_info.loss == 0 %}
@@ -68,7 +52,6 @@ v2.0:
     > {{ backward_info.target }}
     {% endif %} {% endfor %}
 
-    Could you suggest an instruction such that the students could have a higher chance to provide the correct answers than the wrong ones?
-    
+    Could you suggest an instruction such that the students could fix the errors. Avoid providing instructions that are specific to one example, because that may not be useful for the student to solve similar tasks in the future.
     # Instruction:
     >
