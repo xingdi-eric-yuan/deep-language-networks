@@ -366,7 +366,7 @@ class DLN_2(ABC):
     def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, 
                  prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0",
                  first_layer_contrastive=False, score_input_phx=False, normalize_score=False, skip_good_h=False,
-                 normalize_by_length=True, diverse_h_sample=False, residual=False):
+                 normalize_by_length=True, two_step_h_sample=False, two_step_pi_sample=False, residual=False):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
@@ -376,21 +376,20 @@ class DLN_2(ABC):
         self.normalize_score = normalize_score
         self.skip_good_h = skip_good_h
         self.normalize_by_length = normalize_by_length
-        self.diverse_h_sample = diverse_h_sample
+        self.two_step_h_sample = two_step_h_sample
+        self.two_step_pi_sample = two_step_pi_sample
         self.residual = residual
 
-        prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
-        if self.diverse_h_sample:
-            diverse_h_sample_template = "diverse_h_sample_template:1.0"
-        else:
-            diverse_h_sample_template = None
+        two_step_h_sample_template = "two_step_h_sample_template:1.0" if self.two_step_h_sample else None
+        two_step_pi_sample_template = "two_step_pi_sample_template:1.0" if self.two_step_pi_sample else None
 
         l1_template = "ln_forward"
         if self.residual:
             l2_template = "ln_forward_final_layer_residual"
         else:
             l2_template = "ln_forward_final_layer"
-        input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples, diverse_h_sample_template=diverse_h_sample_template)
+        prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples, two_step_sample_template=two_step_pi_sample_template)
+        input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples, two_step_sample_template=two_step_h_sample_template)
         scorer_final_layer = LogProbsScorer(self.forward_evaluate, l2_template, l1_template, self.normalize_by_length)
         scorer = LogProbsScorer(self.forward_evaluate, l1_template, None, self.normalize_by_length)
 
@@ -537,20 +536,20 @@ class DWLN_2(ABC):
 
 class Sampler(ABC):
 
-    def __init__(self, backward_evaluate, backward_template, num_samples=4, diverse_h_sample_template=None):
+    def __init__(self, backward_evaluate, backward_template, num_samples=4, two_step_sample_template=None):
         self.backward_evaluate = backward_evaluate
         self.backward_template = load_template(
             backward_template,
             template_directory="./templates"
         )
         self.num_samples = num_samples
-        if diverse_h_sample_template is not None:
-            self.diverse_h_sample_template = load_template(
-                diverse_h_sample_template,
+        if two_step_sample_template is not None:
+            self.two_step_sample_template = load_template(
+                two_step_sample_template,
                 template_directory="./templates"
             )
         else:
-            self.diverse_h_sample_template = None
+            self.two_step_sample_template = None
 
     def __call__(self, *args, **kwargs):
         return self.sample(*args, **kwargs)
@@ -562,6 +561,12 @@ class Sampler(ABC):
 
 class PromptSampler(Sampler):
 
+    def parse_diverse_pi(self, input):
+        # author: copilot
+        pis = re.findall(r'## Instruction \d+:\n(.*?)(?=## Instruction \d+:|$)', input, re.DOTALL)
+        pis = [pi.strip() for pi in pis]
+        return pis
+
     def sample(self, task, prompt, backward_info, **kwargs):
         """ Sample new prompts using the backward template.
             Returns a numpy array of shape (self.num_samples)
@@ -570,7 +575,7 @@ class PromptSampler(Sampler):
         for _ in range(self.num_samples):
             tpl_inputs.append(
                 self.backward_template.render(
-                    task=task, prompt=prompt, backward_info=backward_info)
+                    task=task, prompt=prompt, backward_infos=backward_info)
             )
 
         new_prompts = self.backward_evaluate(
@@ -578,6 +583,26 @@ class PromptSampler(Sampler):
             stop=self.backward_template.stop_tokens,
             **kwargs,
         )
+        if self.two_step_sample_template is not None:
+            tpl_inputs = []
+            for i in range(self.num_samples):
+                tpl_inputs.append(
+                    self.two_step_sample_template.render(
+                        prompt=new_prompts[i], backward_infos=backward_info)
+                )
+
+            step2_sampled_prompts = self.backward_evaluate(
+                tpl_inputs,
+                stop=self.two_step_sample_template.stop_tokens,
+                temperature=0.7,
+                max_tokens=2000,
+            )
+            step2_sampled_prompts = ["\n".join([a, b]) for a, b in zip(tpl_inputs, step2_sampled_prompts)]  # include the first step prompt
+            # parse the sampled prompts
+            new_prompts = []
+            for i in range(self.num_samples):
+                new_prompts += self.parse_diverse_pi(step2_sampled_prompts[i])
+
         return np.asarray(new_prompts)
 
 
@@ -605,21 +630,21 @@ class InputSampler(Sampler):
             stop=self.backward_template.stop_tokens,
             **kwargs,
         )
-        if self.diverse_h_sample_template is not None:
+        if self.two_step_sample_template is not None:
             tpl_inputs = []
             for i in range(self.num_samples):
                 tpl_inputs.append(
-                    self.diverse_h_sample_template.render(
+                    self.two_step_sample_template.render(
                         first_step_input=backward_info.first_step_input, input=sampled_inputs[i])
                 )
 
             step2_sampled_inputs = self.backward_evaluate(
                 tpl_inputs,
-                stop=self.diverse_h_sample_template.stop_tokens,
+                stop=self.two_step_sample_template.stop_tokens,
                 temperature=0.7,
                 max_tokens=2000,
             )
-            step2_sampled_inputs = ["\n".join([a, b]) for a, b in zip(tpl_inputs, step2_sampled_inputs)]
+            step2_sampled_inputs = ["\n".join([a, b]) for a, b in zip(tpl_inputs, step2_sampled_inputs)]  # include the first step input
             # parse the sampled inputs
             sampled_inputs = []
             for i in range(self.num_samples):
