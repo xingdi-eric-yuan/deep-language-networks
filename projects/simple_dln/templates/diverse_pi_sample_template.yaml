@@ -1,0 +1,17 @@
+v1.0:
+  template: |-
+    As a teacher, you are giving your students a quiz. You want to provide them with useful instructions to help them solve the quiz but without giving away the answer. To experiment the best way of instructing the students, you decide to give different groups of students very different styles of instructions.
+    
+    Read the following quiz and provide five different instructions. Make sure to be clear and specific, avoid providing answers or instructions that are too generic (which are useless).
+
+    ## Quiz
+    {% for backward_info in backward_infos %}
+    Q{{ loop.index }}:
+    {{ backward_info.input }}
+    {% endfor %}
+
+    ## Instruction 1:
+    {{ prompt }}
+
+    ## Instruction 2:
+    

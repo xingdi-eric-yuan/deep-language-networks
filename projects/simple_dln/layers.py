@@ -131,7 +131,7 @@ class LanguageLayer(BaseLayer):
         if self.trainable:
             # update \pi
             # 1) sample \pi proposals
-            pi_candidates = self.prompt_sampler(task, self.prompt, backward_info)
+            pi_candidates = self.prompt_sampler(task, self.prompt, backward_info, two_step_sample=is_first_layer)
             pi_candidates = np.concatenate([pi_candidates, np.asarray([self.prompt])])  # add the current prompt
             # 2) rank the candidates
             best_prompt = self.scorer.get_best_prompt(pi_candidates, backward_info, contrastive=is_first_layer and self.contrastive, normalize=normalize_score)
@@ -567,7 +567,7 @@ class PromptSampler(Sampler):
         pis = [pi.strip() for pi in pis]
         return pis
 
-    def sample(self, task, prompt, backward_info, **kwargs):
+    def sample(self, task, prompt, backward_info, two_step_sample=False, **kwargs):
         """ Sample new prompts using the backward template.
             Returns a numpy array of shape (self.num_samples)
         """
@@ -583,7 +583,7 @@ class PromptSampler(Sampler):
             stop=self.backward_template.stop_tokens,
             **kwargs,
         )
-        if self.two_step_sample_template is not None:
+        if two_step_sample is True and self.two_step_sample_template is not None:
             tpl_inputs = []
             for i in range(self.num_samples):
                 tpl_inputs.append(
