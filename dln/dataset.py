@@ -71,6 +71,7 @@ class Dataset:
 
         self.rng = np.random.RandomState(self.random_seed)
         self.few_shot_rng = np.random.RandomState(self.random_seed)
+        self.data_shuffling_rng = np.random.RandomState(42)
 
         # load dataset from file
         self.dataset = dict(
@@ -155,7 +156,7 @@ class Dataset:
             if max_size > 0:
                 log_message(f"Cutting {split} dataset to {max_size} examples.")
                 indices = []
-                pick_order = self.rng.choice(
+                pick_order = self.data_shuffling_rng.choice(
                     list(self.dataset[split_per_class].keys()),
                     len(self.dataset[split_per_class].keys()),
                     replace=False,
@@ -163,7 +164,7 @@ class Dataset:
 
                 i = 0
                 while len(indices) < max_size:
-                    indices += self.rng.choice(
+                    indices += self.data_shuffling_rng.choice(
                         self.dataset[split_per_class][
                             pick_order[i % len(pick_order)]
                         ],

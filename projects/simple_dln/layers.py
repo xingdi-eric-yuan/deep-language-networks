@@ -385,17 +385,18 @@ class DLN_2(ABC):
         else:
             diverse_h_sample_template = None
 
+        l1_template = "ln_forward"
         if self.residual:
             l2_template = "ln_forward_final_layer_residual"
         else:
             l2_template = "ln_forward_final_layer"
         input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples, diverse_h_sample_template=diverse_h_sample_template)
-        scorer_final_layer = LogProbsScorer(self.forward_evaluate, l2_template, "ln_forward", self.normalize_by_length)
-        scorer = LogProbsScorer(self.forward_evaluate, "ln_forward", None, self.normalize_by_length)
+        scorer_final_layer = LogProbsScorer(self.forward_evaluate, l2_template, l1_template, self.normalize_by_length)
+        scorer = LogProbsScorer(self.forward_evaluate, l1_template, None, self.normalize_by_length)
 
         self.l1 = LanguageLayer(
             forward_evaluate,
-            "ln_forward",
+            l1_template,
             prompt_sampler=prompt_sampler,
             input_sampler=input_sampler,
             scorer=scorer,
