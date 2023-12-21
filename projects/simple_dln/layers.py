@@ -124,7 +124,7 @@ class LanguageLayer(BaseLayer):
     def prompt_print(self):
         return self.node.prompt
 
-    def backward(self, task, backward_info, normalize_score=False, skip_good_h=False, is_first_layer=False):
+    def backward2(self, task, backward_info, normalize_score=False, skip_good_h=False, is_first_layer=False):
         inputs = [item.input for item in backward_info]
         gt_outputs = [item.target for item in backward_info]
         previous_prompt = copy.copy(self.prompt)
@@ -157,6 +157,44 @@ class LanguageLayer(BaseLayer):
                                                     phx=self.score_input_phx)
             # 3) collect new inputs
             new_inputs.append(best_input)
+        return previous_prompt, self.prompt, inputs, new_inputs
+    
+    def backward(self, task, backward_info, normalize_score=False, skip_good_h=False, is_first_layer=False):
+        inputs = [item.input for item in backward_info]
+        gt_outputs = [item.target for item in backward_info]
+        previous_prompt = copy.copy(self.prompt)
+        new_inputs = copy.copy(inputs)
+
+        # update inputs
+        if not is_first_layer:
+            new_inputs = []
+            for i in range(len(backward_info)):
+                if skip_good_h and backward_info[i].loss == 0:
+                    new_inputs.append(inputs[i])
+                    continue
+
+                # 1) sample input proposals
+                input_candidates = self.input_sampler(self.prompt, backward_info[i])  # num_samples
+                # 2) rank the inputs
+                best_input = self.scorer.get_best_input(self.prompt, input_candidates, gt_outputs[i],
+                                                        backward_info[i].first_step_input, 
+                                                        self.parent_layer.prompt if self.parent_layer is not None else None, 
+                                                        normalize=normalize_score,
+                                                        phx=self.score_input_phx)
+                # 3) collect new inputs
+                new_inputs.append(best_input)
+                backward_info[i].input = best_input
+
+        if self.trainable:
+            # update \pi
+            # 1) sample \pi proposals
+            pi_candidates = self.prompt_sampler(task, self.prompt, backward_info, two_step_sample=is_first_layer)
+            pi_candidates = np.concatenate([pi_candidates, np.asarray([self.prompt])])  # add the current prompt
+            # 2) rank the candidates
+            best_prompt = self.scorer.get_best_prompt(pi_candidates, backward_info, contrastive=is_first_layer and self.contrastive, normalize=normalize_score)
+            # 3) update prompt with the best candidate
+            self._update_prompt(best_prompt)
+        
         return previous_prompt, self.prompt, inputs, new_inputs
 
 
