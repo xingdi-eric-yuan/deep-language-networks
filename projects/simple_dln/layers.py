@@ -625,7 +625,7 @@ class InputSampler(Sampler):
         for _ in range(self.num_samples):
             tpl_inputs.append(
                 self.backward_template.render(
-                    prompt=prompt, input=backward_info.input, target=backward_info.target, output=backward_info.output)
+                    prompt=prompt, first_step_input=backward_info.first_step_input, input=backward_info.input, target=backward_info.target, output=backward_info.output)
             )
 
         sampled_inputs = self.backward_evaluate(
