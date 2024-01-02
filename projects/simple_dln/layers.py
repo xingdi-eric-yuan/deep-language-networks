@@ -564,7 +564,7 @@ class Sampler(ABC):
 
 class PromptSampler(Sampler):
 
-    def parse_diverse_pi(self, input):
+    def parse_second_step_pi(self, input):
         # author: copilot
         pis = re.findall(r'## Instruction \d+:\n(.*?)(?=## Instruction \d+:|$)', input, re.DOTALL)
         pis = [pi.strip() for pi in pis]
@@ -604,14 +604,14 @@ class PromptSampler(Sampler):
             # parse the sampled prompts
             new_prompts = []
             for i in range(self.num_samples):
-                new_prompts += self.parse_diverse_pi(step2_sampled_prompts[i])
+                new_prompts += self.parse_second_step_pi(step2_sampled_prompts[i])
 
         return np.asarray(new_prompts)
 
 
 class InputSampler(Sampler):
 
-    def parse_diverse_h(self, input):
+    def parse_second_step_h(self, input):
         # author: copilot
         hs = re.findall(r'## Solution \d+:\n(.*?)(?=## Solution \d+:|$)', input, re.DOTALL)
         hs = [h.strip() for h in hs]
@@ -651,7 +651,7 @@ class InputSampler(Sampler):
             # parse the sampled inputs
             sampled_inputs = []
             for i in range(self.num_samples):
-                sampled_inputs += self.parse_diverse_h(step2_sampled_inputs[i])
+                sampled_inputs += self.parse_second_step_h(step2_sampled_inputs[i])
 
         return np.asarray(sampled_inputs)
 

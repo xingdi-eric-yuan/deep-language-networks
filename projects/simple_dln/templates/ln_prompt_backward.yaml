@@ -1,57 +1,55 @@
 v1.0:
   template: |-
-    A student is completing a task that requires producing a text output from a text input. The student receives an instruction that describes how to produce the output given each input.
-    The student has made some errors. Your task is to improve the instruction such that the student can fix the errors. Note that the instruction should not be too specific, otherwise the student will not learn how to solve similar tasks in the future.
+    A student is completing a task that requires producing a text output from a text input. The student receives an instruction that describes how to produce the output given each input. The student has made some errors. Your task is to improve the old instruction such that the student can fix the errors. 
 
-    This was the instruction.
-    # Instruction
-    > {{ prompt }}
-
-    # Student successes:
+    Below are some examples where the student solved the task correctly with the old instruction.
     {% for backward_info in backward_infos %} {% if backward_info.loss == 0 %}
     ## Input:
-    > {{ backward_info.input }}
+    {{ backward_info.input }}
     ## Correct Output:
-    > {{ backward_info.target }}
+    {{ backward_info.target }}
     {% endif %} {% endfor %}
 
-    # Student errors:
+    Below are some examples where the student made mistakes with the old instruction.
     {% for backward_info in backward_infos %} {% if backward_info.loss != 0 %}
     ## Input:
-    > {{ backward_info.input }}
+    {{ backward_info.input }}
     ## Student Output:
-    > {{ backward_info.output }}
+    {{ backward_info.output }}
     ## Correct Output:
-    > {{ backward_info.target }}
+    {{ backward_info.target }}
     {% endif %} {% endfor %}
 
+    Below is the old instruction you want to improve based on.
+    # Old instruction:
+    {{ prompt }}
+
     Improve the instruction to fix the student errors. Avoid providing instructions that are specific to one example, because that may not be useful for the student to solve similar tasks in the future.
-    ## Improved instruction
-    >
+    # Improved instruction:
+    
 
 v2.0:
   template: |-
-    A student is completing a task that requires producing a text output from a text input. 
-    The student has made some errors. Your task is to suggest an instruction such that the student can fix the errors. Note that the instruction should not be too specific, otherwise the student will not learn how to solve similar tasks in the future.
+    A student is completing a task that requires producing a text output from a text input. The student has made some errors. Your task is to suggest an instruction such that the student can fix the errors.
 
-    # Student successes:
+    Below are some examples where the student solved the task correctly.
     {% for backward_info in backward_infos %} {% if backward_info.loss == 0 %}
     ## Input:
-    > {{ backward_info.input }}
+    {{ backward_info.input }}
     ## Correct Output:
-    > {{ backward_info.target }}
+    {{ backward_info.target }}
     {% endif %} {% endfor %}
 
-    # Student errors:
+    Below are some examples where the student made mistakes.
     {% for backward_info in backward_infos %} {% if backward_info.loss != 0 %}
     ## Input:
-    > {{ backward_info.input }}
+    {{ backward_info.input }}
     ## Student Output:
-    > {{ backward_info.output }}
+    {{ backward_info.output }}
     ## Correct Output:
-    > {{ backward_info.target }}
+    {{ backward_info.target }}
     {% endif %} {% endfor %}
 
     Could you suggest an instruction such that the students could fix the errors. Avoid providing instructions that are specific to one example, because that may not be useful for the student to solve similar tasks in the future.
     # Instruction:
-    >
+    
