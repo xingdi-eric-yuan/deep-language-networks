@@ -13,6 +13,7 @@ from tenacity import (
     wait_exponential,
     retry_if_exception_type,
 )
+from termcolor import colored
 import yaml
 
 
@@ -107,13 +108,15 @@ class GPT(LLM):
     CHAT_COMPLETION_MODELS = [
         "gpt-35-turbo",  # azure
         "gpt-3.5-turbo",
+        "gpt-4-turbo",
         "gpt-4",
         "gpt-4-32k",
         "gpt-4-0613",
     ]
 
     COMPLETION_MODELS = [
-        "gpt-35-turbo-instruct",
+        "gpt-35-turbo-instruct",  # azure
+        "gpt-3.5-turbo-instruct",
         "text-davinci-003",
         "text-davinci-002",
         "code-davinci-002",
@@ -131,11 +134,7 @@ class GPT(LLM):
                 f"GPT model_name should be one of: {','.join(self.AVAILABLE_MODELS)}"
             )
         super().__init__(model_name, **generation_options)
-        engine_for_encoder = self.engine
-        if engine_for_encoder == "gpt-35-turbo":
-            engine_for_encoder = "gpt-3.5-turbo"
-        elif engine_for_encoder == "gpt-35-turbo-instruct":
-            engine_for_encoder = "gpt-3.5-turbo"
+        engine_for_encoder = self.engine.replace("gpt-35", "gpt-3.5")
         self.encoder = instantiate_tokenizer(engine_for_encoder)
         openai.api_version = os.environ.get('OPENAI_API_VERSION')
         self._has_logprobs = self.engine in self.LOGPROBS_MODELS
@@ -147,6 +146,15 @@ class GPT(LLM):
     def has_logprobs(self) -> bool:
         return self._has_logprobs
 
+    @staticmethod
+    def _log_filtering_error_message(error_message, prompt):
+        error_message = (
+            f"InvalidRequestError, most likely due to content filtering. "
+            f"Prompt: {prompt}. ErrorMessage: {error_message}"
+        )
+        logging.warning(error_message)
+        print(colored(error_message, "red"))
+
     @_retry_request(min_wait=4, max_wait=10, max_attempts=100)
     async def _aget_chat_completion_response(self, prompt, **kwargs):
         """
@@ -154,22 +162,17 @@ class GPT(LLM):
         now batching only works for completion, not on chat
         """
         if openai.api_type == "azure":
-            try:
-                response = await openai.ChatCompletion.acreate(
-                    deployment_id=self.engine,
-                    messages=[{"role": "user", "content": prompt}],
-                    **kwargs,
-                )
-            except openai.InvalidRequestError as e:
-                # Most likely a content filtering error from Azure.
-                logging.warn(str(e))
-                return str(e)
+            kwargs["deployment_id"] = self.engine
         else:
+            kwargs["model"] = self.engine
+        try:
             response = await openai.ChatCompletion.acreate(
-                model=self.engine,
                 messages=[{"role": "user", "content": prompt}],
                 **kwargs,
             )
+        except openai.InvalidRequestError as e:
+            self._log_filtering_error_message(e, prompt)
+            raise e
 
         if "content" not in response["choices"][0]["message"]:
             return ""
@@ -177,7 +180,7 @@ class GPT(LLM):
         output = response["choices"][0]["message"]["content"].strip()
         return output
 
-    @_retry_request(min_wait=4, max_wait=10, max_attempts=100)
+    @_retry_request(min_wait=4, max_wait=10, max_attempts=500)
     def _get_completion_response(
         self,
         prompt_batch,
@@ -191,7 +194,6 @@ class GPT(LLM):
         now batching only works for completion, not on chat
         """
         logging.debug(kwargs)
-
         try:
             response = openai.Completion.create(
                 engine=self.engine,
@@ -200,34 +202,18 @@ class GPT(LLM):
                 **kwargs,
             )
         except openai.InvalidRequestError as e:
-            # Most likely a content filtering error from Azure.
-            if "filtering" in str(e):
-                logging.warn(str(e))
-                # Process each element in the batch individually.
-                response = {"choices": []}
+            # Retry one by one to find out which prompt is causing the error for debugging
+            try:
                 for prompt in prompt_batch:
-                    try:
-                        response["choices"].append(
-                            openai.Completion.create(
-                                engine=self.engine,
-                                prompt=prompt,
-                                logprobs=top_logprobs or 1,
-                                **kwargs,
-                            )["choices"][0]
-                        )
-                    except openai.InvalidRequestError as e:
-                        response["choices"].append(
-                            {
-                                "text": str(e),
-                                "logprobs": {
-                                    "token_logprobs": [0],
-                                    "top_logprobs": [{}],
-                                    "tokens": {}
-                                },
-                            }
-                        )
-            else:
-                raise e
+                    _ = openai.Completion.create(
+                        engine=self.engine,
+                        prompt=prompt,
+                        logprobs=top_logprobs or 1,
+                        **kwargs,
+                    )
+            except openai.InvalidRequestError as err:
+                self._log_filtering_error_message(err, prompt)
+            raise e
 
         return _parse_openai_response(response, return_logprobs, raw_logprobs, top_logprobs)
 
@@ -262,7 +248,7 @@ class GPT(LLM):
         generation_options.update(**kwargs)
 
         if "return_logprobs" in generation_options and not self.has_logprobs:
-            logging.warn(
+            logging.warning(
                 f"return_logprobs is not supported for model {self.engine}"
             )
             del generation_options["return_logprobs"]
@@ -271,7 +257,7 @@ class GPT(LLM):
             if async_generation is True:
                 # async call api, devide to mini batches to avoid call rate limit
                 outputs = []
-                for input_batch in self._mini_batch(inputs, batch_size=10):
+                for input_batch in self._mini_batch(inputs, batch_size=batch_size):
                     outputs_batch = asyncio.run(
                         self._gather_chat_response(input_batch, **generation_options)
                     )
