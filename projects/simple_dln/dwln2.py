@@ -109,8 +109,10 @@ def train(model, dataset: Dataset, batch_size, iters, patience):
         log_message(colored("------- L2", "red"))
         log_message(colored(model.l2.prompt_print(), "red"))
         for i, (a, b, c, d, e) in enumerate(zip(input, h, new_h, y_hat, y)):
+            if b == c:
+                c = "--"
             log_message("-------------------------------" + str(i))
-            log_message(f"--------------\nx: {a}\nh: {b}\nnew_h: {c}\ny_hat: {d}\ny: {e}\n")
+            log_message(f"--------------\n**x:**\n{a}\n\n**h:**\n{b}\n\n**new_h:**\n{c}\n\n**y_hat:**\n{d}\n\n**y:**\n{e}\n\n")
 
         model.zero_grad()
         _acc = validate(model, dataset, iter_num + 1)
@@ -134,7 +136,8 @@ def train(model, dataset: Dataset, batch_size, iters, patience):
     model.load_model(best_model)
     log_message("===================================")
     log_message(colored("BEST DEV ACC: %s" % str(best_acc), "red"))
-    test_acc = test(model, dataset)
+    # test_acc = test(model, dataset)
+    test_acc = 0.0
     log_message(colored("TEST ACC: %s" % str(test_acc), "red"))
     log_message(colored("BEST MODEL:", "red"))
     log_message("L1 weights:\n", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))

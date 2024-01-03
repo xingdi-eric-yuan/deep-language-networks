@@ -466,7 +466,6 @@ class DWLN_2(ABC):
             aggregation=self.aggregation,
             trainable=True,
             contrastive=self.first_layer_contrastive,
-            score_input_phx=self.score_input_phx,
         )
         self.l2 = LanguageLayer(
             forward_evaluate,
@@ -510,7 +509,7 @@ class DWLN_2(ABC):
         self.new_h = new_h
         # l1
         l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.h, new_h, losses)]
-        _ = self.l1.backward(self.task, l1_backward_info, normalize_score=self.normalize_score, is_first_layer=True)
+        _ = self.l1.backward(self.task, l1_backward_info, normalize_score=self.normalize_score)
 
 
 class Sampler(ABC):
