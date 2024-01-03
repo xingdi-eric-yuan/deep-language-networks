@@ -1,11 +1,12 @@
 v1.0:
   template: |-
-    You are discussing with a group of students to solve a problem together. You are listening to the group and taking notes. Now, you want to present your thoughts on solving the problem. You can build your thoughts based on the opinions of others.
+    Summarize the thoughts below.
     
     {% for _inp in inputs %}
-    ## Note {{ loop.index }}
+    ## Thought {{ loop.index }}:
     {{ _inp }}
     {% endfor %}
 
-    # Your thoughts (make it complete and self-contained):
+    ## Summary:
+
     

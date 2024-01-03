@@ -170,13 +170,11 @@ class WideLayer(BaseLayer):
         forward_evaluate: LLM,
         forward_template: str,
         prompt_sampler: "Sampler",
-        input_sampler: "Sampler",
         scorer: "Scorer",
         init: list = None,
         aggregation: str = "concat",
         trainable: bool = True,
         contrastive: bool = False,
-        score_input_phx: bool = False,
     ):
         forward_template = load_template(
             forward_template,
@@ -188,12 +186,10 @@ class WideLayer(BaseLayer):
         ]
         self.forward_evaluate = forward_evaluate
         self.prompt_sampler = prompt_sampler
-        self.input_sampler = input_sampler
         self.scorer = scorer
         self.trainable = trainable
         self.aggregation = aggregation
         self.contrastive = contrastive
-        self.score_input_phx = score_input_phx
         assert self.aggregation in ["concat", "summary"]
         self.aggregation_forward_template = load_template(
             "aggr_" + self.aggregation + "_forward",
@@ -243,72 +239,46 @@ class WideLayer(BaseLayer):
         outputs = self.aggregate(outputs, **kwargs)
         return np.asarray(outputs)
 
-    def backward(self, task, backward_info, normalize_score=False, is_first_layer=False):
+    def backward(self, task, backward_info, normalize_score=False):
         inputs = [item.input for item in backward_info]
-        gt_outputs = [item.target for item in backward_info]
         previous_prompt = copy.copy(self.prompt)
+
+        if not self.trainable:
+            return previous_prompt, self.prompt, inputs, inputs
 
         if self.aggregation == "concat":
             # update prompts
-            if self.trainable:
-                # update \pi for each node independently, each of them aims to maximize the logprob of the target
-                pi_candidates_list = []
-                for i in range(self.width):
-                    # 1) sample \pi proposals
-                    _pi_candidates = self.prompt_sampler(task, self.prompt[i], backward_info)
-                    pi_candidates_list = pi_candidates_list + _pi_candidates.tolist()
-                pi_candidates_list = pi_candidates_list + self.prompt  # add the current prompt
-                pi_candidates_list = list(set(pi_candidates_list))
-                if len(pi_candidates_list) < self.width:
-                    pi_candidates_list = pi_candidates_list + self.prompt
-                pi_candidates = np.asarray(pi_candidates_list)
-                # 2) rank the candidates, take top k, where k is num_nodes
-                best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, backward_info, self.width, contrastive=is_first_layer and self.contrastive, normalize=normalize_score)
-                # 3) update the top k prompts
-                self._update_prompt(best_k_prompt)
-
-            # update inputs
-            if is_first_layer:
-                return previous_prompt, self.prompt, inputs, inputs
-            new_inputs = []
-            for i in range(len(backward_info)):
-                # 1) sample input proposals
-                input_candidates = self.input_sampler(self.prompt, backward_info[i])  # num_prompts x num_samples
-                # 2) rank the inputs
-                best_input = self.scorer.get_best_input4WideConcat(self.prompt, input_candidates, gt_outputs[i])
-                # 3) collect new inputs
-                new_inputs.append(best_input)
-            return previous_prompt, self.prompt, inputs, new_inputs
-
+            # update \pi for each node independently, each of them aims to maximize the logprob of the target
+            pi_candidates_list = []
+            for i in range(self.width):
+                # 1) sample \pi proposals
+                _pi_candidates = self.prompt_sampler(task, self.prompt[i], backward_info)
+                pi_candidates_list = pi_candidates_list + _pi_candidates.tolist()
+            pi_candidates_list = pi_candidates_list + self.prompt  # add the current prompt
+            pi_candidates_list = list(set(pi_candidates_list))
+            if len(pi_candidates_list) < self.width:
+                pi_candidates_list = pi_candidates_list + self.prompt
+            pi_candidates = np.asarray(pi_candidates_list)
+            # 2) rank the candidates, take top k, where k is num_nodes
+            best_k_prompt = self.scorer.get_best_k_prompt(pi_candidates, backward_info, self.width, contrastive=self.contrastive, normalize=normalize_score)
+            # 3) update the top k prompts
+            self._update_prompt(best_k_prompt)
         elif self.aggregation == "summary":
             # update prompts
-            if self.trainable:
-                # update \pi jointly, together they aim to maximize the logprob of the target
-                pi_candidates_list = []
-                for i in range(self.width):
-                    # 1) sample \pi proposals
-                    _pi_candidates = self.prompt_sampler(task, self.prompt[i], backward_info)
-                    _pi_candidates = np.concatenate([_pi_candidates, np.asarray([self.prompt[i]])])  # add the current prompt
-                    pi_candidates_list.append(_pi_candidates)
-                # 2) rank the candidate tuples
-                best_prompt = self.scorer.get_best_prompt4WideSummary(pi_candidates_list, backward_info, self.aggregation_forward_template)
-                # 3) update prompt all together
-                self._update_prompt(list(best_prompt))
-            # update inputs
-            if is_first_layer:
-                return previous_prompt, self.prompt, inputs, inputs
-
-            new_inputs = []
-            for i in range(len(backward_info)):
-                # 1) sample input proposals
-                input_candidates = self.input_sampler(self.prompt, backward_info[i])  # num_samples
-                # 2) rank the inputs
-                best_input = self.scorer.get_best_input4WideSummary(self.prompt, input_candidates, gt_outputs[i], self.aggregation_forward_template)
-                # 3) collect new inputs
-                new_inputs.append(best_input)
-            return previous_prompt, self.prompt, inputs, new_inputs
+            # update \pi jointly, together they aim to maximize the logprob of the target
+            pi_candidates_list = []
+            for i in range(self.width):
+                # 1) sample \pi proposals
+                _pi_candidates = self.prompt_sampler(task, self.prompt[i], backward_info)
+                _pi_candidates = np.concatenate([_pi_candidates, np.asarray([self.prompt[i]])])  # add the current prompt
+                pi_candidates_list.append(_pi_candidates)
+            # 2) rank the candidate tuples
+            best_prompt = self.scorer.get_best_prompt4WideSummary(pi_candidates_list, backward_info, self.aggregation_forward_template, contrastive=self.contrastive, normalize=normalize_score)
+            # 3) update prompt all together
+            self._update_prompt(list(best_prompt))
         else:
             raise NotImplementedError
+        return previous_prompt, self.prompt, inputs, inputs
 
     def __repr__(self):
         return f"Layer({repr(self.node_list)})"
@@ -455,7 +425,9 @@ class DWLN_2(ABC):
 
     def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, aggregation="concat", width=2, 
                  prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0",
-                 first_layer_contrastive=False, score_input_phx=False, normalize_score=False, skip_good_h=False):
+                 first_layer_contrastive=False, score_input_phx=False, normalize_score=False, skip_good_h=False,
+                 normalize_by_length=True, two_step_h_sample=False, two_step_pi_sample=False, residual=False):
+
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
@@ -466,35 +438,39 @@ class DWLN_2(ABC):
         self.score_input_phx = score_input_phx
         self.normalize_score = normalize_score
         self.skip_good_h = skip_good_h
+        self.normalize_by_length = normalize_by_length
+        self.two_step_h_sample = two_step_h_sample
+        self.two_step_pi_sample = two_step_pi_sample
+        self.residual = residual
 
-        if self.aggregation == "concat":
-            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
-            wide_layer_input_sampler = InputSampler4WideConcat(self.backward_evaluate, input_backward_template, num_samples=num_samples)
-        elif self.aggregation == "summary":
-            wide_layer_prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
-            wide_layer_input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples)
+        two_step_h_sample_template = "two_step_h_sample_template:1.0" if self.two_step_h_sample else None
+        two_step_pi_sample_template = "two_step_pi_sample_template:1.0" if self.two_step_pi_sample else None
+
+        l1_template = "ln_forward"
+        if self.residual:
+            l2_template = "ln_forward_final_layer_residual"
         else:
-            raise NotImplementedError
-        prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
-        input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples)  # HiddenSampler hidden_backward
-        scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer")
-        scorer = LogProbsScorer(self.forward_evaluate, "ln_forward")
+            l2_template = "ln_forward_final_layer"
+        prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples, two_step_sample_template=two_step_pi_sample_template)
+        input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples, two_step_sample_template=two_step_h_sample_template)
+        scorer_final_layer = LogProbsScorer(self.forward_evaluate, l2_template, l1_template, self.normalize_by_length)
+        scorer = LogProbsScorer(self.forward_evaluate, l1_template, None, self.normalize_by_length)
         _init_list = ["Let's think step by step."] * self.width
 
         self.l1 = WideLayer(
             forward_evaluate,
-            "ln_forward",
-            prompt_sampler=wide_layer_prompt_sampler,
-            input_sampler=wide_layer_input_sampler,
+            l1_template,
+            prompt_sampler=prompt_sampler,
             scorer=scorer,
             init=_init_list,
             aggregation=self.aggregation,
             trainable=True,
+            contrastive=self.first_layer_contrastive,
             score_input_phx=self.score_input_phx,
         )
         self.l2 = LanguageLayer(
             forward_evaluate,
-            "ln_forward_final_layer",
+            l2_template,
             prompt_sampler=prompt_sampler,
             input_sampler=input_sampler,
             scorer=scorer_final_layer,
@@ -521,7 +497,7 @@ class DWLN_2(ABC):
         # x: batch of strings
         self.inputs = ["\n".join([self.task, _x]) for _x in x]
         self.h = self.l1(self.inputs)  # batch
-        self.outputs = self.l2(self.h)  # batch
+        self.outputs = self.l2(self.h, self.inputs if self.residual else None)  # batch
         return self.outputs
 
     def backward(self, gt):
@@ -570,7 +546,7 @@ class PromptSampler(Sampler):
         pis = [pi.strip() for pi in pis]
         return pis
 
-    def sample(self, task, prompt, backward_info, two_step_sample=False, **kwargs):
+    def sample(self, task, prompt, backward_info, two_step_sample=True, **kwargs):
         """ Sample new prompts using the backward template.
             Returns a numpy array of shape (self.num_samples)
         """
@@ -654,30 +630,6 @@ class InputSampler(Sampler):
                 sampled_inputs += self.parse_second_step_h(step2_sampled_inputs[i])
 
         return np.asarray(sampled_inputs)
-
-
-class InputSampler4WideConcat(Sampler):
-
-    def sample(self, prompt_list, backward_info, **kwargs):
-        """ Sample new inputs using the backward template.
-            Returns a numpy array of shape (self.num_samples * len(prompt_list))
-        """
-        outputs = []
-        for prompt in prompt_list:
-            tpl_inputs = []
-            for _ in range(self.num_samples):
-                tpl_inputs.append(
-                    self.backward_template.render(
-                        prompt=prompt, target=backward_info.target, output=backward_info.output)
-                )
-
-            sampled_inputs = self.backward_evaluate(
-                tpl_inputs,
-                stop=self.backward_template.stop_tokens,
-                **kwargs,
-            )
-            outputs += sampled_inputs
-        return np.asarray(outputs)
 
 
 class HistoryScoreCache(object):
@@ -902,49 +854,51 @@ class LogProbsScorer(Scorer):
         best_input = inputs[best_indexes]
         return best_input
 
-    def get_best_input4WideConcat(self, prompt_list, inputs, gt_output, **kwargs):
-        # Select the best input candidate that maximizes the logprob of the target, summed over all prompts
-        num_prompts, num_inputs = len(prompt_list), len(inputs)
-        contexts = self._render_context(prompt_list, inputs)  # num_prompts x inputs
-        eval_batch = []
-        for i in range(num_prompts):
-            eval_batch += [f"{contexts[i][j]}\n{gt_output}" for j in range(num_inputs)]
-        eval_results = self._forward_unique_evals(eval_batch)
-        logprobs_results = self._get_logprobs_results(contexts, eval_results)
-        scores = logprobs_results.logp_targets.reshape(
-            num_prompts, num_inputs
-        ).sum(axis=0)  # num_inputs
-        best_indexes = scores.argmax(axis=-1)  # 1
-        best_input = inputs[best_indexes]
-        return best_input
-    
-    def get_best_input4WideSummary(self, prompt_list, inputs, gt_output, aggregation_forward_template, **kwargs):
-        # Select the best input candidate that maximizes the logprob of the target
-        num_nodes, num_inputs = len(prompt_list), len(inputs)
-        # get the contexts for each node and each input candidate
-        contexts = self._render_context(prompt_list, inputs)  # num_prompts x inputs
-        # call the LLM for each node separately (first call)
+    def get_candidate_prompt_logprobs4WideSummary_contrastive(self, prompts_candidates, backward_info, aggregation_forward_template, normalize, **kwargs):
+        score_pos = self.get_candidate_prompt_logprobs4WideSummary(prompts_candidates, backward_info, aggregation_forward_template, normalize, **kwargs)
+        # now get neg scores
+        inputs = [item.input for item in backward_info if item.loss > 0.0]
+        wrong_outputs = [item.output for item in backward_info if item.loss > 0.0]
+        if len(inputs) == 0:
+            return score_pos
+        # prompts_candidates: num_nodes x num_candidates per node
+        # inputs: num_inputs
+        # wrong_outputs: num_inputs
+        num_nodes = len(prompts_candidates)
+        num_candidates_per_node = len(prompts_candidates[0])
+        num_inputs = len(inputs)  # also the number of gt_outputs
+        merged_context = []
+        for i in range(num_nodes):
+            _first_step_context = self._render_context([prompts_candidates[i][j] for j in range(num_candidates_per_node)], inputs)  # num_candidates_per_node x inputs
+            for j in range(num_candidates_per_node):
+                merged_context += _first_step_context[j]  # inputs
+        # merged_context: num_nodes*num_candidates*inputs
+        merged_h = self._forward_unique_evals(merged_context, forward=True)
+        # split the merged_h into num_nodes x num_nodes*num_candidates
         h_list = []
         for i in range(num_nodes):
-            tmp = self._forward_unique_evals(contexts[i], forward=True)  # inputs
-            h_list.append(tmp)  # num_nodes x inputs
+            h_list.append(merged_h[i*num_candidates_per_node*num_inputs:(i+1)*num_candidates_per_node*num_inputs])
+        # h_list: num_nodes x num_candidates_per_node*inputs
         # now aggregate the h_list
         eval_batch = []
+        wrong_outputs_expand = wrong_outputs * num_candidates_per_node
         contexts = []
-        for i in range(num_inputs):
-            _inputs = [h_list[j][i] for j in range(num_nodes)]  # num_nodes
+        for i in range(len(h_list[0])):  # num_candidates_per_node*inputs
+            _inputs = [h_list[j][i] for j in range(num_nodes)]
             _inputs = aggregation_forward_template.render(inputs=_inputs)
             contexts.append(_inputs)
-            eval_batch.append(f"{_inputs}\n{gt_output}")
-
+            eval_batch.append(f"{_inputs}\n{wrong_outputs_expand[i]}")
         eval_results = self._forward_unique_evals(eval_batch)
-        logprobs_results = self._get_logprobs_results(contexts, eval_results)  # inputs
+        logprobs_results = self._get_logprobs_results(contexts, eval_results)  # num_candidates*inputs
+        score_neg = logprobs_results.logp_targets.reshape(
+            num_candidates_per_node, num_inputs
+        ).mean(axis=-1)  # num_candidates
+        if normalize:
+            score_neg = self.y_given_pi_pool.normalize(score_neg)
+        scores = score_pos - score_neg
+        return scores
 
-        best_indexes = logprobs_results.logp_targets.argmax(axis=-1)  # 1
-        best_input = inputs[best_indexes]
-        return best_input
-
-    def get_best_prompt4WideSummary(self, prompts_candidates, backward_info, aggregation_forward_template, **kwargs):
+    def get_candidate_prompt_logprobs4WideSummary(self, prompts_candidates, backward_info, aggregation_forward_template, normalize, **kwargs):
         inputs = [item.input for item in backward_info]
         gt_outputs = [item.target for item in backward_info]
         # prompts_candidates: num_nodes x num_candidates per node
@@ -978,9 +932,18 @@ class LogProbsScorer(Scorer):
         eval_results = self._forward_unique_evals(eval_batch)
         logprobs_results = self._get_logprobs_results(contexts, eval_results)  # num_candidates*inputs
 
-        scores = logprobs_results.logp_targets.reshape(
+        score_pos = logprobs_results.logp_targets.reshape(
             num_candidates_per_node, num_inputs
-        ).sum(axis=-1)  # num_candidates
+        ).mean(axis=-1)  # num_candidates
+        if normalize:
+            score_pos = self.y_given_pi_pool.normalize(score_pos)
+        return score_pos
+
+    def get_best_prompt4WideSummary(self, prompts_candidates, backward_info, aggregation_forward_template, contrastive=False, normalize=False, **kwargs):
+        if contrastive:
+            scores = self.get_candidate_prompt_logprobs4WideSummary_contrastive(prompts_candidates, backward_info, aggregation_forward_template, normalize, **kwargs)
+        else:
+            scores = self.get_candidate_prompt_logprobs4WideSummary(prompts_candidates, backward_info, aggregation_forward_template, normalize, **kwargs)
         best_indexes = scores.argmax(axis=-1)  # 1
         best_prompt = [item[best_indexes] for item in prompts_candidates]  # num_nodes
         return best_prompt
