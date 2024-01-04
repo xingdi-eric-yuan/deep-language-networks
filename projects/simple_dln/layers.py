@@ -24,6 +24,7 @@ class LNBackwardInfo:
     output: str = None
     target: str = None
     loss: float = None
+    output_per_node: List[str] = None
 
 
 class Node(ABC):
@@ -235,9 +236,14 @@ class WideLayer(BaseLayer):
             raise NotImplementedError
 
     def forward(self, inputs: Iterable[str], **kwargs) -> np.asarray:
-        outputs = [node(inputs, **kwargs) for node in self.node_list]
-        outputs = self.aggregate(outputs, **kwargs)
-        return np.asarray(outputs)
+        output_list = [node(inputs, **kwargs) for node in self.node_list]
+        outputs = self.aggregate(output_list, **kwargs)
+        # output_list: width x batch x output_len
+        # we need to make it batch x width x output_len
+        batch_output = []
+        for i in range(len(inputs)):
+            batch_output.append([output_list[j][i] for j in range(self.width)])
+        return np.asarray(outputs), batch_output
 
     def backward(self, task, backward_info, normalize_score=False):
         inputs = [item.input for item in backward_info]
@@ -330,7 +336,7 @@ class DLN_1(ABC):
         # loss
         losses = self.loss_function(self.outputs, gt)
         # l1
-        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.outputs, gt, losses)]
+        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss, None) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.outputs, gt, losses)]
         _ = self.l1.backward(self.task, l1_backward_info, normalize_score=self.normalize_score, is_first_layer=True)
 
 
@@ -413,11 +419,11 @@ class DLN_2(ABC):
         # loss
         losses = self.loss_function(self.outputs, gt)
         # l2
-        l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.h, self.outputs, gt, losses)]
+        l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss, None) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.h, self.outputs, gt, losses)]
         _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, normalize_score=self.normalize_score, is_first_layer=False, skip_good_h=self.skip_good_h)
         self.new_h = new_h
         # l1
-        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.h, new_h, losses)]
+        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss, None) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.h, new_h, losses)]
         _ = self.l1.backward(self.task, l1_backward_info, normalize_score=self.normalize_score, is_first_layer=True)
 
 
@@ -482,6 +488,7 @@ class DWLN_2(ABC):
     
     def zero_grad(self):
         self.inputs, self.h, self.new_h, self.outputs = [], [], [], []
+        self.h_per_node = []
 
     def save_model(self):
         return [item.prompt for item in self.l1.node_list] + [self.l2.node.prompt]
@@ -495,7 +502,7 @@ class DWLN_2(ABC):
     def forward(self, x):
         # x: batch of strings
         self.inputs = ["\n".join([self.task, _x]) for _x in x]
-        self.h = self.l1(self.inputs)  # batch
+        self.h, self.h_per_node = self.l1(self.inputs)  # batch
         self.outputs = self.l2(self.h, self.inputs if self.residual else None)  # batch
         return self.outputs
 
@@ -504,11 +511,11 @@ class DWLN_2(ABC):
         # loss
         losses = self.loss_function(self.outputs, gt)
         # l2
-        l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.h, self.outputs, gt, losses)]
+        l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss, None) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.h, self.outputs, gt, losses)]
         _, _, _, new_h = self.l2.backward(self.task, l2_backward_info, normalize_score=self.normalize_score, is_first_layer=False, skip_good_h=self.skip_good_h)
         self.new_h = new_h
         # l1
-        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.h, new_h, losses)]
+        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss, _o_per_node) for _i0, _i, _o, _gt, _loss, _o_per_node in zip(self.inputs, self.inputs, self.h, new_h, losses, self.h_per_node)]
         _ = self.l1.backward(self.task, l1_backward_info, normalize_score=self.normalize_score)
 
 
