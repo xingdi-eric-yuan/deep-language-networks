@@ -577,10 +577,13 @@ class PromptSampler(Sampler):
             )
             step2_sampled_prompts = ["\n".join([a, b]) for a, b in zip(tpl_inputs, step2_sampled_prompts)]  # include the first step prompt
             # parse the sampled prompts
-            new_prompts = []
+            results = []
             for i in range(self.num_samples):
-                new_prompts += self.parse_second_step_pi(step2_sampled_prompts[i])
-
+                __results = self.parse_second_step_pi(step2_sampled_prompts[i])
+                while len(__results) < 5:
+                    __results.append(new_prompts[i])
+                results += __results
+            new_prompts = results
         return np.asarray(new_prompts)
 
 
@@ -624,10 +627,13 @@ class InputSampler(Sampler):
             )
             step2_sampled_inputs = ["\n".join([a, b]) for a, b in zip(tpl_inputs, step2_sampled_inputs)]  # include the first step input
             # parse the sampled inputs
-            sampled_inputs = []
+            results = []
             for i in range(self.num_samples):
-                sampled_inputs += self.parse_second_step_h(step2_sampled_inputs[i])
-
+                __results = self.parse_second_step_h(step2_sampled_inputs[i])
+                while len(__results) < 5:
+                    __results.append(sampled_inputs[i])
+                results += __results
+            sampled_inputs = results
         return np.asarray(sampled_inputs)
 
 
@@ -858,6 +864,7 @@ class LogProbsScorer(Scorer):
         # now get neg scores
         inputs = [item.input for item in backward_info if item.loss > 0.0]
         wrong_outputs = [item.output for item in backward_info if item.loss > 0.0]
+        first_step_inputs = [item.first_step_input for item in backward_info if item.loss > 0.0]
         if len(inputs) == 0:
             return score_pos
         # prompts_candidates: num_nodes x num_candidates per node
@@ -868,7 +875,7 @@ class LogProbsScorer(Scorer):
         num_inputs = len(inputs)  # also the number of gt_outputs
         merged_context = []
         for i in range(num_nodes):
-            _first_step_context = self._render_context([prompts_candidates[i][j] for j in range(num_candidates_per_node)], inputs)  # num_candidates_per_node x inputs
+            _first_step_context = self._render_context([prompts_candidates[i][j] for j in range(num_candidates_per_node)], inputs, first_step_inputs)  # num_candidates_per_node x inputs
             for j in range(num_candidates_per_node):
                 merged_context += _first_step_context[j]  # inputs
         # merged_context: num_nodes*num_candidates*inputs
@@ -900,6 +907,7 @@ class LogProbsScorer(Scorer):
     def get_candidate_prompt_logprobs4WideSummary(self, prompts_candidates, backward_info, aggregation_forward_template, normalize, **kwargs):
         inputs = [item.input for item in backward_info]
         gt_outputs = [item.target for item in backward_info]
+        first_step_inputs = [item.first_step_input for item in backward_info]
         # prompts_candidates: num_nodes x num_candidates per node
         # inputs: num_inputs
         # gt_outputs: num_inputs
@@ -909,7 +917,7 @@ class LogProbsScorer(Scorer):
 
         merged_context = []
         for i in range(num_nodes):
-            _first_step_context = self._render_context([prompts_candidates[i][j] for j in range(num_candidates_per_node)], inputs)  # num_candidates_per_node x inputs
+            _first_step_context = self._render_context([prompts_candidates[i][j] for j in range(num_candidates_per_node)], inputs, first_step_inputs)  # num_candidates_per_node x inputs
             for j in range(num_candidates_per_node):
                 merged_context += _first_step_context[j]  # inputs
         # merged_context: num_nodes*num_candidates*inputs
