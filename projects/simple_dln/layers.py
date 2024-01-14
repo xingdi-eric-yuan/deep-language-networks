@@ -101,6 +101,7 @@ class LanguageLayer(ABC):
             forward_template,
             template_directory="./templates"
         )
+        self.forward_evaluate = forward_evaluate
         self.node = Node(init, self.forward_template, forward_evaluate)
         self.prompt_sampler = prompt_sampler
         self.input_sampler = input_sampler
@@ -257,6 +258,7 @@ class WideLayer(ABC):
         aggregation: str = "concat",
         trainable: bool = True,
         contrastive: bool = False,
+        parent_layer: "ABC" = None,
     ):
         self.forward_template = load_template(
             forward_template,
@@ -278,6 +280,7 @@ class WideLayer(ABC):
             template_directory="./templates"
         )
         self.layer_type = "WideLayer"
+        self.parent_layer = parent_layer
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
