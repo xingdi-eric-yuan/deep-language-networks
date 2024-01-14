@@ -5,9 +5,9 @@ v1.0:
     Below are some examples where the student solved the task correctly with the old instruction.
     {% for _info in prompt_update_infos %} {% if _info.loss == 0 %}
     ## Input:
-    {{ backward_info.input }}
+    {{ _info.input }}
     ## Correct Output:
-    {{ backward_info.target }}
+    {{ _info.target }}
     {% endif %} {% endfor %}
 
     Below are some examples where the student made mistakes with the old instruction.

@@ -19,28 +19,31 @@ class LogProbs:
 
 @dataclass
 class LNBackwardInfo:
-    first_step_input = None
-    input = None
-    output = None
-    target = None
-    loss = None
+    def __init__(self, first_step_input=None, input=None, output=None, target=None, loss=None):
+        self.first_step_input = first_step_input
+        self.input = input
+        self.output = output
+        self.target = target
+        self.loss = loss
 
 
 @dataclass
 class HUpdateInfo:
-    first_step_input = None
-    input = None
-    output = None
-    target = None
+    def __init__(self, first_step_input=None, input=None, output=None, target=None):
+        self.first_step_input = first_step_input
+        self.input = input
+        self.output = output
+        self.target = target
 
 
 @dataclass
 class PiUpdateInfo:
-    first_step_input = None
-    input = None
-    output = None
-    target = None
-    loss = None
+    def __init__(self, first_step_input=None, input=None, output=None, target=None, loss=None):
+        self.first_step_input = first_step_input
+        self.input = input
+        self.output = output
+        self.target = target
+        self.loss = loss
 
 
 class Node(ABC):
@@ -186,7 +189,7 @@ class LanguageLayer(ABC):
                 raise NotImplementedError
             for i in range(batch_size):
                 pi_update_info.append(PiUpdateInfo(first_step_input=backward_info[i].first_step_input,  # str
-                                                    input=aggregated_inputs,  # str
+                                                    input=aggregated_inputs[i],  # str
                                                     output=backward_info[i].output,  # str
                                                     target=backward_info[i].target,  # str
                                                     loss=backward_info[i].loss))
@@ -324,7 +327,7 @@ class WideLayer(ABC):
             batch_output.append([output_list[j][i] for j in range(self.width)])
         return np.asarray(outputs), batch_output
 
-    def backward(self, task, backward_info, normalize_score=False):
+    def backward(self, backward_info, normalize_score=False):
         if not self.trainable:
             return
         assert isinstance(backward_info[0].output, list)
@@ -487,11 +490,11 @@ class DLN_2(ABC):
         losses = self.loss_function(self.outputs, gt)
         # l2
         l2_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.h, self.outputs, gt, losses)]
-        new_h = self.l2.backward(self.task, l2_backward_info, normalize_score=self.normalize_score, skip_good_h=self.skip_good_h)  # todo: in residual case, the l2 input is not exactly that
+        new_h = self.l2.backward(l2_backward_info, normalize_score=self.normalize_score, skip_good_h=self.skip_good_h)  # todo: in residual case, the l2 input is not exactly that
         self.new_h = new_h
         # l1
-        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.h, new_h, losses)]
-        _ = self.l1.backward(self.task, l1_backward_info, normalize_score=self.normalize_score)
+        l1_backward_info = [LNBackwardInfo(_i, _i, _o, _gt, _loss) for _i, _o, _gt, _loss in zip(self.inputs, self.h, new_h, losses)]
+        _ = self.l1.backward(l1_backward_info, normalize_score=self.normalize_score)
 
 
 class DWLN_2(ABC):
@@ -569,7 +572,7 @@ class DWLN_2(ABC):
     def forward(self, x):
         # x: batch of strings
         self.inputs = ["\n".join([self.task, _x]) for _x in x]
-        self.h, self.h_per_node = self.l1(self.inputs)  # batch
+        self.h, self.h_per_node = self.l1(self.inputs)  # h: batch; h_per_node: batch x width
         self.outputs = self.l2(self.h, self.inputs if self.residual else None)  # batch
         return self.outputs
 
@@ -578,12 +581,12 @@ class DWLN_2(ABC):
         # loss
         losses = self.loss_function(self.outputs, gt)
         # l2
-        l2_backward_info = [LNBackwardInfo(_i0, _h_per_node, _o, _gt, _loss) for _i0, _o, _gt, _loss, _h_per_node in zip(self.inputs, self.h_per_node, self.outputs, gt, losses)]
-        new_h = self.l2.backward(self.task, l2_backward_info, normalize_score=self.normalize_score, skip_good_h=self.skip_good_h)
+        l2_backward_info = [LNBackwardInfo(_i0, _h_per_node, _o, _gt, _loss) for _i0, _h_per_node, _o, _gt, _loss in zip(self.inputs, self.h_per_node, self.outputs, gt, losses)]
+        new_h = self.l2.backward(l2_backward_info, normalize_score=self.normalize_score, skip_good_h=self.skip_good_h)
         self.new_h = new_h  # list x width
         # l1
-        l1_backward_info = [LNBackwardInfo(_i0, _i, _o, _gt, _loss) for _i0, _i, _o, _gt, _loss in zip(self.inputs, self.inputs, self.h_per_node, new_h, losses)]
-        self.l1.backward(self.task, l1_backward_info, normalize_score=self.normalize_score)
+        l1_backward_info = [LNBackwardInfo(_i, _i, _o, _gt, _loss) for _i, _o, _gt, _loss in zip(self.inputs, self.h_per_node, new_h, losses)]
+        self.l1.backward(l1_backward_info, normalize_score=self.normalize_score)
 
 
 class Sampler(ABC):
