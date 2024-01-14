@@ -53,3 +53,23 @@ v2.0:
     Could you suggest an instruction such that the students could fix the errors. Avoid providing instructions that are specific to one example, because that may not be useful for the student to solve similar tasks in the future.
     # Instruction:
     
+v3.0:
+  template: |-
+    A student is completing a task that requires producing a text output from a text input. The student receives an instruction that describes how to produce the output given each input. The student has made some errors. Your task is to improve the old instruction such that the student can fix the errors. 
+
+    Below are some examples where the student made mistakes with the old instruction.
+    {% for _info in prompt_update_infos %} {% if _info.loss != 0 %}
+    ## Input:
+    {{ _info.input }}
+    ## Student Output:
+    {{ _info.output }}
+    ## Correct Output:
+    {{ _info.target }}
+    {% endif %} {% endfor %}
+
+    Below is the old instruction you want to improve based on.
+    # Old instruction:
+    {{ prompt }}
+
+    Improve the instruction to fix the student errors. Avoid providing instructions that are specific to one example, because that may not be useful for the student to solve similar tasks in the future.
+    # Improved instruction:
