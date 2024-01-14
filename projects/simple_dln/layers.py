@@ -233,15 +233,16 @@ class LanguageLayer(ABC):
             raise NotImplementedError
 
         if self.trainable:
-            is_first_layer = self.parent_layer is None
-            # update \pi
-            # 1) sample \pi proposals
-            pi_candidates = self.prompt_sampler.sample(self.prompt, pi_update_info, two_step_sample=is_first_layer)
-            pi_candidates = np.concatenate([pi_candidates, np.asarray([self.prompt])])  # add the current prompt
-            # 2) rank the candidates
-            best_prompt = self.scorer.get_best_prompt(pi_candidates, pi_update_info, contrastive=is_first_layer and self.contrastive, normalize=normalize_score)
-            # 3) update prompt with the best candidate
-            self._update_prompt(best_prompt)
+            if np.sum([item.loss for item in backward_info]) > 0:
+                is_first_layer = self.parent_layer is None
+                # update \pi
+                # 1) sample \pi proposals
+                pi_candidates = self.prompt_sampler.sample(self.prompt, pi_update_info, two_step_sample=is_first_layer)
+                pi_candidates = np.concatenate([pi_candidates, np.asarray([self.prompt])])  # add the current prompt
+                # 2) rank the candidates
+                best_prompt = self.scorer.get_best_prompt(pi_candidates, pi_update_info, contrastive=is_first_layer and self.contrastive, normalize=normalize_score)
+                # 3) update prompt with the best candidate
+                self._update_prompt(best_prompt)
         
         return new_inputs
 
@@ -339,7 +340,9 @@ class WideLayer(ABC):
         assert len(backward_info[0].target) == self.width
         batch_size = len(backward_info)
         is_first_layer = self.parent_layer is None
-        
+        if np.sum([item.loss for item in backward_info]) == 0:
+            return
+
         # update prompts
         # update \pi for each node independently, each of them aims to maximize the logprob of the target
         best_prompt_list = []
