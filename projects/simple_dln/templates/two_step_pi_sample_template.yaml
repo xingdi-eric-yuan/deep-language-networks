@@ -3,9 +3,9 @@ v1.0:
     Read the following quiz and provide five different instructions that are commonly helpful in solving all the questions. Make sure to be clear and specific but avoid giving away the answer.
 
     ## Quiz
-    {% for backward_info in backward_infos %}
+    {% for _info in prompt_update_infos %}
     Q{{ loop.index }}:
-    {{ backward_info.input }}
+    {{ _info.input }}
     {% endfor %}
 
     ## Instruction 1:
