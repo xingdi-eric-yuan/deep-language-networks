@@ -15,7 +15,7 @@ normalize_by_length=True
 # two_step_pi_sample=True
 
 
-for input_backward_template in False True; do
+for first_layer_contrastive in False True; do
 for score_input_phx in False True; do
 for normalize_score in False True; do
 for two_step_h_sample in False True; do
