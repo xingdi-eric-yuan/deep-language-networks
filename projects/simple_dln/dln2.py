@@ -1,3 +1,4 @@
+import argparse
 from argparse import ArgumentParser
 import datetime
 import logging
@@ -16,6 +17,17 @@ from dln.operator import LLMRegistry
 
 from dln.vi.model import log_message
 from layers import DLN_2
+
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
 def validate(model, dataset: Dataset, iteration):
@@ -212,14 +224,14 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--patience", type=int, default=0)
     parser.add_argument("--num_samples", type=int, default=5)
-    parser.add_argument("--first_layer_contrastive", type=bool, default=False)
-    parser.add_argument("--score_input_phx", type=bool, default=False)
-    parser.add_argument("--normalize_score", type=bool, default=False)
-    parser.add_argument("--skip_good_h", type=bool, default=False)
-    parser.add_argument("--normalize_by_length", type=bool, default=True)
-    parser.add_argument("--two_step_h_sample", type=bool, default=False)
-    parser.add_argument("--two_step_pi_sample", type=bool, default=False)
-    parser.add_argument("--residual", type=bool, default=False)
+    parser.add_argument("--first_layer_contrastive", type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--score_input_phx", type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--normalize_score", type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--skip_good_h", type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--normalize_by_length", type=bool, type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--two_step_h_sample", type=bool, type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--two_step_pi_sample", type=bool, type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument("--residual", type=bool, type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument("--out_dir", type=str, default="./log", help="log directory")
     args = parser.parse_args()
     train_dln(args)
