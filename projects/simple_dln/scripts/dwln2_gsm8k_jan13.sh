@@ -2,8 +2,8 @@
 set -x  # print commands to terminal
 
 dataset="gsm8k"
-dir=log/jan13/dwln2/${dataset}
-prompt_backward_template="ln_prompt_backward:3.0"  # "ln_prompt_backward:2.0"
+dir=log/jan15/dwln2/${dataset}
+prompt_backward_template="ln_prompt_backward:1.0"  # "ln_prompt_backward:2.0",  "ln_prompt_backward:3.0"
 input_backward_template="ln_input_backward:1.0"  # "ln_input_backward:2.0"
 first_layer_contrastive=True
 num_samples=10
@@ -25,7 +25,7 @@ for agg in concat summary; do
                 --dataset ${dataset} \
                 --max_train_size 400 \
                 --batch_size 5 \
-                --iters 20 \
+                --iters 10 \
                 --patience 2 \
                 --num_samples ${num_samples} \
                 --aggregation ${agg} \
