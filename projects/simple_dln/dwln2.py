@@ -4,6 +4,7 @@ import datetime
 import logging
 import os
 import tqdm
+import yaml
 import re
 import numpy as np
 from collections import Counter
@@ -185,12 +186,16 @@ def train_dln(args):
     bwd_model = llm_registry[args.bwd_model]
 
     # loss_fn = LossRegistry.instantiate(args.loss_function)
-    if args.dataset == "subj":
-        task_info_str = "Read the following sentence, then choose whether it is subjective or objective."
-    elif args.dataset == "gsm8k":
+    if args.dataset == "gsm8k":
         task_info_str = "Solve the math word problem."
     else:
-        raise NotImplementedError
+        with open("../../dln/dataset_info.yaml") as reader:
+            task_info_dict = yaml.safe_load(reader)
+            if args.dataset in task_info_dict:
+                task_info_str = task_info_dict[args.dataset]["instruction"]
+            else:
+                raise ValueError(f"Dataset {args.dataset} not found in dln/dataset_info.yaml")
+
     model = DWLN_2(task_info_str, fwd_model, bwd_model, num_samples=args.num_samples, aggregation=args.aggregation, width=args.width,
                    prompt_backward_template=args.prompt_backward_template, input_backward_template=args.input_backward_template,
                    first_layer_contrastive=args.first_layer_contrastive, score_input_phx=args.score_input_phx, 
