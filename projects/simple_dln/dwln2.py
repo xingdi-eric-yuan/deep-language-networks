@@ -148,8 +148,8 @@ def train(model, loss_function, dataset: Dataset, batch_size, iters, patience):
     model.load_model(best_model)
     log_message("===================================")
     log_message(colored("BEST DEV ACC: %s" % str(best_acc), "red"))
-    # test_acc = test(model, loss_function, dataset)
-    test_acc = 0.0
+    test_acc = test(model, loss_function, dataset)
+    # test_acc = 0.0
     log_message(colored("TEST ACC: %s" % str(test_acc), "red"))
     log_message(colored("BEST MODEL:", "red"))
     log_message("L1 weights:\n", model.l1.prompt_print(), "\n-- This layer is " + ("trainable" if model.l1.trainable else "fixed"))
