@@ -8,7 +8,6 @@ import itertools
 
 from dln.operator import LLM
 from dln.template import load_template
-from dln.loss import NumberPresenceLoss
 
 
 @dataclass
@@ -368,21 +367,24 @@ class WideLayer(ABC):
 
 class DLN_1(ABC):
 
-    def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5,
+    def __init__(self, task, forward_evaluate, backward_evaluate, loss_function, num_samples=5,
                  prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0", normalize_score=False):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
-        self.loss_function = NumberPresenceLoss()
+        self.loss_function = loss_function
         self.normalize_score = normalize_score
 
+        l1_template = "ln_forward_final_layer"
+        if "math word problem" in self.task:
+            l1_template += "_gsm8k"
         prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples)
         input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples)  # HiddenSampler hidden_backward
-        scorer_final_layer = LogProbsScorer(self.forward_evaluate, "ln_forward_final_layer")
+        scorer_final_layer = LogProbsScorer(self.forward_evaluate, l1_template)
 
         self.l1 = LanguageLayer(
             forward_evaluate,
-            "ln_forward_final_layer",
+            l1_template,
             prompt_sampler=prompt_sampler,
             input_sampler=input_sampler,
             scorer=scorer_final_layer,
@@ -418,14 +420,14 @@ class DLN_1(ABC):
 
 class DLN_2(ABC):
 
-    def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, 
+    def __init__(self, task, forward_evaluate, backward_evaluate, loss_function, num_samples=5, 
                  prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0",
                  first_layer_contrastive=False, score_input_phx=False, normalize_score=False, skip_good_h=False,
                  normalize_by_length=True, two_step_h_sample=False, two_step_pi_sample=False, residual=False):
         self.forward_evaluate = forward_evaluate
         self.backward_evaluate = backward_evaluate
         self.task = task
-        self.loss_function = NumberPresenceLoss()
+        self.loss_function = loss_function
         self.first_layer_contrastive = first_layer_contrastive
         self.score_input_phx = score_input_phx
         self.normalize_score = normalize_score
@@ -443,6 +445,8 @@ class DLN_2(ABC):
             l2_template = "ln_forward_final_layer_residual"
         else:
             l2_template = "ln_forward_final_layer"
+        if "math word problem" in self.task:
+            l2_template += "_gsm8k"
         prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples, two_step_sample_template=two_step_pi_sample_template)
         input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples, two_step_sample_template=two_step_h_sample_template)
         scorer_final_layer = LogProbsScorer(self.forward_evaluate, l2_template, l1_template, self.normalize_by_length)
@@ -505,7 +509,7 @@ class DLN_2(ABC):
 
 class DWLN_2(ABC):
 
-    def __init__(self, task, forward_evaluate, backward_evaluate, num_samples=5, aggregation="concat", width=2, 
+    def __init__(self, task, forward_evaluate, backward_evaluate, loss_function, num_samples=5, aggregation="concat", width=2, 
                  prompt_backward_template="ln_prompt_backward:1.0", input_backward_template="ln_input_backward:1.0",
                  first_layer_contrastive=False, score_input_phx=False, normalize_score=False, skip_good_h=False,
                  normalize_by_length=True, two_step_h_sample=False, two_step_pi_sample=False, residual=False):
@@ -515,7 +519,7 @@ class DWLN_2(ABC):
         self.task = task
         self.aggregation = aggregation
         self.width = width
-        self.loss_function = NumberPresenceLoss()
+        self.loss_function = loss_function
         self.first_layer_contrastive = first_layer_contrastive
         self.score_input_phx = score_input_phx
         self.normalize_score = normalize_score
@@ -533,6 +537,8 @@ class DWLN_2(ABC):
             l2_template = "ln_forward_final_layer_residual"
         else:
             l2_template = "ln_forward_final_layer"
+        if "math word problem" in self.task:
+            l2_template += "_gsm8k"
         prompt_sampler = PromptSampler(self.backward_evaluate, prompt_backward_template, num_samples=num_samples, two_step_sample_template=two_step_pi_sample_template)
         input_sampler = InputSampler(self.backward_evaluate, input_backward_template, num_samples=num_samples, two_step_sample_template=two_step_h_sample_template)
         scorer_final_layer = LogProbsScorer(self.forward_evaluate, l2_template, l1_template, self.normalize_by_length)

@@ -6,5 +6,5 @@ v1.0:
     # Instruction:
     {{ prompt }}
 
-    # Output:
+    # Output (the number only):
     

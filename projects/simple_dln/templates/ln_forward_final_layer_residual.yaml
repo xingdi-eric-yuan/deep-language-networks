@@ -9,5 +9,5 @@ v1.0:
     # Instruction:
     {{ prompt }}
 
-    # Output (the number only):
+    # Output:
     

@@ -11,7 +11,7 @@ from collections import Counter
 from termcolor import colored
 
 from dln.dataset import Dataset, init_dataset
-from dln.loss import NumberPresenceLoss
+from dln.loss import NumberPresenceLoss, ExactMatchLoss
 
 # from dln.loss import LossRegistry
 from dln.operator import LLMRegistry
@@ -31,7 +31,7 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
-def validate(model, dataset: Dataset, iteration):
+def validate(model, loss_function, dataset: Dataset, iteration):
 
     log_message("===================================")
     log_message(colored("VALIDATING... ITER %s" % str(iteration), "red"))
@@ -46,7 +46,6 @@ def validate(model, dataset: Dataset, iteration):
         desc="Eval",
     )
     dataset.reset_pointer("dev")
-    loss_function = NumberPresenceLoss()
 
     for batch in dataset.iterate("dev", batch_size=20):
         x, y, _ = batch
@@ -67,7 +66,7 @@ def validate(model, dataset: Dataset, iteration):
     return dev_acc
 
 
-def test(model, dataset: Dataset):
+def test(model, loss_function, dataset: Dataset):
 
     log_message("===================================")
     log_message(colored("TESTING... ", "red"))
@@ -82,7 +81,6 @@ def test(model, dataset: Dataset):
         desc="Eval",
     )
     dataset.reset_pointer("test")
-    loss_function = NumberPresenceLoss()
 
     for batch in dataset.iterate("test", batch_size=20):
         x, y, _ = batch
@@ -100,10 +98,10 @@ def test(model, dataset: Dataset):
     return test_acc
 
 
-def train(model, dataset: Dataset, batch_size, iters, patience):
+def train(model, loss_function, dataset: Dataset, batch_size, iters, patience):
 
     dev_acc = []
-    _acc = validate(model, dataset, 0)
+    _acc = validate(model, loss_function, dataset, 0)
     dev_acc.append(_acc)
     best_model = model.save_model()
     log_message(colored("Saving model...", "red"))
@@ -128,7 +126,7 @@ def train(model, dataset: Dataset, batch_size, iters, patience):
             log_message(f"--------------\n**x:**\n{a}\n\n**h:**\n{b}\n\n**new_h:**\n{c}\n\n**y_hat:**\n{d}\n\n**y:**\n{e}\n\n")
 
         model.zero_grad()
-        _acc = validate(model, dataset, iter_num + 1)
+        _acc = validate(model, loss_function, dataset, iter_num + 1)
         dev_acc.append(_acc)
         log_message("===================================")
         log_message(colored("DEV ACC", "blue"))
@@ -149,7 +147,7 @@ def train(model, dataset: Dataset, batch_size, iters, patience):
     model.load_model(best_model)
     log_message("===================================")
     log_message(colored("BEST DEV ACC: %s" % str(best_acc), "red"))
-    # test_acc = test(model, dataset)
+    # test_acc = test(model, loss_function, dataset)
     test_acc = 0.0
     log_message(colored("TEST ACC: %s" % str(test_acc), "red"))
     log_message(colored("BEST MODEL:", "red"))
@@ -188,15 +186,17 @@ def train_dln(args):
     # loss_fn = LossRegistry.instantiate(args.loss_function)
     if args.dataset == "gsm8k":
         task_info_str = "Solve the math word problem."
+        loss_fn = NumberPresenceLoss()
     else:
         with open("../../dln/dataset_info.yaml") as reader:
             task_info_dict = yaml.safe_load(reader)
             if args.dataset in task_info_dict:
                 task_info_str = task_info_dict[args.dataset]["instruction"]
+                loss_fn = ExactMatchLoss()
             else:
                 raise ValueError(f"Dataset {args.dataset} not found in dln/dataset_info.yaml")
 
-    model = DWLN_2(task_info_str, fwd_model, bwd_model, num_samples=args.num_samples, aggregation=args.aggregation, width=args.width,
+    model = DWLN_2(task_info_str, fwd_model, bwd_model, loss_fn, num_samples=args.num_samples, aggregation=args.aggregation, width=args.width,
                    prompt_backward_template=args.prompt_backward_template, input_backward_template=args.input_backward_template,
                    first_layer_contrastive=args.first_layer_contrastive, score_input_phx=args.score_input_phx, 
                    normalize_score=args.normalize_score, skip_good_h=args.skip_good_h, normalize_by_length=args.normalize_by_length,
@@ -204,8 +204,8 @@ def train_dln(args):
 
     train(
         model=model,
+        loss_function=loss_fn,
         dataset=dataset,
-        # loss_fn=loss_fn,
         batch_size=args.batch_size,
         iters=args.iters,
         patience=args.patience
