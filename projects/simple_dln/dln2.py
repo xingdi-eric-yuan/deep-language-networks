@@ -12,6 +12,7 @@ from termcolor import colored
 
 from dln.dataset import Dataset, init_dataset
 from dln.loss import NumberPresenceLoss, ExactMatchLoss
+from dln.postprocessing import postprocess_prediction
 
 # from dln.loss import LossRegistry
 from dln.operator import LLMRegistry
@@ -194,7 +195,7 @@ def train_dln(args):
                 task_info_str = task_info_dict[args.dataset]["instruction"]
             else:
                 raise ValueError(f"Dataset {args.dataset} not found in dln/dataset_info.yaml")
-            loss_fn = ExactMatchLoss()
+            loss_fn = ExactMatchLoss(postproc=postprocess_prediction)
 
     model = DLN_2(task_info_str, fwd_model, bwd_model, loss_fn, num_samples=args.num_samples,
                    prompt_backward_template=args.prompt_backward_template, input_backward_template=args.input_backward_template,
