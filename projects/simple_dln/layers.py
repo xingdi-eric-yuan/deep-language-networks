@@ -635,18 +635,34 @@ class PromptSampler(Sampler):
         """ Sample new prompts using the backward template.
             Returns a numpy array of shape (self.num_samples)
         """
-        tpl_inputs = []
-        for _ in range(self.num_samples):
-            tpl_inputs.append(
-                self.backward_template.render(
-                    prompt=prompt, prompt_update_infos=prompt_update_infos)
-            )
+        while True:
+            try:
+                tpl_inputs = []
+                for _ in range(self.num_samples):
+                    tpl_inputs.append(
+                        self.backward_template.render(
+                            prompt=prompt, prompt_update_infos=prompt_update_infos)
+                    )
 
-        new_prompts = self.backward_evaluate(
-            tpl_inputs,
-            stop=self.backward_template.stop_tokens,
-            **kwargs,
-        )
+                new_prompts = self.backward_evaluate(
+                    tpl_inputs,
+                    stop=self.backward_template.stop_tokens,
+                    **kwargs,
+                )
+                break
+            except KeyboardInterrupt:
+                break
+            except:
+                if len(prompt_update_infos) > 1:
+                    prompt_update_infos = prompt_update_infos[1:]
+                    print("DROPPING A DATA POINT...")
+                else:
+                    error_message = (
+                        "Still exeeding context length after shrinking backward_infos."
+                    )
+                    print(error_message)
+                    raise ValueError(error_message)
+
         if two_step_sample is True and self.two_step_sample_template is not None:
             tpl_inputs = []
             for i in range(self.num_samples):
